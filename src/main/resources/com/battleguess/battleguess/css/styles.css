@@ -1,0 +1,32 @@
+.button {
+    -fx-background-color: #4CAF50;
+    -fx-text-fill: white;
+    -fx-font-size: 14px;
+}
+
+.button:hover {
+    -fx-background-color: #45a049;
+}
+
+.active-tool {
+    -fx-background-color: #2e7d32;
+    -fx-border-color: yellow;
+    -fx-border-width: 2px;
+}
+
+.choice-box {
+    -fx-font-size: 14px;
+}
+
+.text-field {
+    -fx-font-size: 14px;
+}
+
+.list-view {
+    -fx-border-color: black;
+    -fx-border-width: 1;
+}
+
+.label {
+    -fx-font-size: 14px;
+}

@@ -1,0 +1,85 @@
+.root {
+    -fx-font-family: "Segoe UI", "Roboto", sans-serif;
+    -fx-background-color: linear-gradient(to bottom right, #2c3e50, #4ca1af);
+    -fx-font-size: 14px;
+}
+
+.card {
+    -fx-background-color: rgba(255, 255, 255, 0.1);
+    -fx-background-radius: 15;
+    -fx-padding: 20;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 10, 0, 0, 4);
+}
+
+.title-label {
+    -fx-text-fill: white;
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+}
+
+.form-label {
+    -fx-text-fill: white;
+}
+
+.form-field {
+    -fx-pref-width: 180;
+    -fx-background-radius: 8;
+    -fx-background-color: rgba(255,255,255,0.85);
+    -fx-padding: 6 10;
+    -fx-border-radius: 8;
+    -fx-border-color: transparent;
+}
+
+.primary-button {
+    -fx-background-color: #4CAF50;
+    -fx-text-fill: white;
+    -fx-background-radius: 8;
+    -fx-padding: 8 16;
+}
+
+.secondary-button {
+    -fx-background-color: #2196F3;
+    -fx-text-fill: white;
+    -fx-background-radius: 8;
+    -fx-padding: 8 16;
+}
+
+.accent-button {
+    -fx-background-color: #FFC107;
+    -fx-text-fill: #222;
+    -fx-background-radius: 8;
+    -fx-padding: 8 16;
+}
+
+.tool-button {
+    -fx-background-color: rgba(255,255,255,0.2);
+    -fx-text-fill: white;
+    -fx-background-radius: 6;
+    -fx-padding: 6 12;
+}
+
+.tool-button:hover {
+    -fx-background-color: rgba(255,255,255,0.3);
+}
+
+.danger {
+    -fx-background-color: #e74c3c;
+}
+
+.toolbar {
+    -fx-background-color: rgba(0, 0, 0, 0.25);
+    -fx-padding: 8;
+}
+
+.color-picker {
+    -fx-background-radius: 6;
+}
+
+.drawing-pane {
+    -fx-background-color: white;
+    -fx-border-color: #ccc;
+    -fx-border-radius: 10;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0, 0, 3);
+}
+
+
