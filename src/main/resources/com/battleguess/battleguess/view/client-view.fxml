@@ -1,83 +1,184 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<?import javafx.scene.layout.VBox?>
-<?import javafx.scene.layout.HBox?>
-<?import javafx.scene.control.TextField?>
+
+<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
-<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
 <?import java.net.URL?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.shape.Circle?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.control.ScrollPane?>
 
-<VBox fx:id="mainPane" fx:controller="com.battleguess.battleguess.controller.ClientController"
-      alignment="CENTER" spacing="20" xmlns:fx="http://javafx.com/fxml">
+<BorderPane fx:id="rootLayout" xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.battleguess.battleguess.controller.ClientController"
+            prefHeight="700.0" prefWidth="900.0">
     <stylesheets>
         <URL value="@../css/modern.css"/>
     </stylesheets>
-    <padding>
-        <Insets top="30" bottom="30" left="40" right="40"/>
-    </padding>
 
-    <!-- Kết nối -->
-    <VBox fx:id="connectPane" spacing="15" alignment="CENTER" styleClass="card">
-        <Label text="🎮 Connect to Game" styleClass="title-label"/>
-        <HBox spacing="10" alignment="CENTER">
-            <Label text="Name:" styleClass="form-label"/>
-            <TextField fx:id="nameField" promptText="Enter your name" styleClass="form-field"/>
-        </HBox>
-        <HBox spacing="10" alignment="CENTER">
-            <Label text="Port:" styleClass="form-label"/>
-            <TextField fx:id="portField" promptText="1024-65535" styleClass="form-field"/>
-        </HBox>
-        <Button fx:id="connectButton" text="Connect" onAction="#connectToServer" styleClass="primary-button"/>
-    </VBox>
+    <left>
+        <VBox fx:id="leftNavPane" spacing="20" styleClass="card"
+              visible="false" managed="false" prefWidth="250">
+            <padding>
+                <Insets top="20" right="20" bottom="20" left="20"/>
+            </padding>
+            <VBox spacing="5" style="-fx-alignment: CENTER_LEFT;">
+                <Label text="👤 Player Info" styleClass="title-label"/>
+                <Label fx:id="lblPlayerName" text="Player Name" style="-fx-font-size: 16px; -fx-text-fill: white;"/>
+                <Label fx:id="lblPlayerID" text="ID: ??" style="-fx-font-size: 12px; -fx-text-fill: #ccc;"/>
+            </VBox>
+            <TabPane VBox.vgrow="ALWAYS" tabClosingPolicy="UNAVAILABLE">
+                <tabs>
+                    <Tab text="Phòng đã tạo">
+                        <VBox spacing="10" style="-fx-padding: 10 0 0 0;">
+                            <Button fx:id="btnShowCreateRoom" text="+ Tạo phòng mới"
+                                    onAction="#handleShowCreateRoom" styleClass="primary-button" maxWidth="Infinity"/>
+                            <ListView fx:id="createdRoomsListView" VBox.vgrow="ALWAYS"/>
+                        </VBox>
+                    </Tab>
+                    <Tab text="Phòng đã tham gia">
+                        <VBox spacing="10" style="-fx-padding: 10 0 0 0;">
+                            <HBox alignment="CENTER_RIGHT" style="-fx-padding: 0 5 5 0;">
+                                <Button fx:id="reloadJoinedRoomsButton" text="🔄 Tải lại"
+                                        styleClass="tool-button" style="-fx-font-size: 10px;"/>
+                            </HBox>
+                            <ListView fx:id="joinedRoomsListView" VBox.vgrow="ALWAYS"/>
+                        </VBox>
+                    </Tab>
+                </tabs>
+            </TabPane>
+        </VBox>
+    </left>
 
-    <!-- Game -->
-    <VBox fx:id="gamePane" spacing="20" alignment="CENTER" visible="false" managed="false" styleClass="card">
-        <HBox spacing="15" alignment="CENTER">
-            <Button fx:id="createRoomButton" text="Create Room" onAction="#showCreateRoom" styleClass="primary-button"/>
-            <Button fx:id="joinRoomButton" text="Join Room" onAction="#showJoinRoom" styleClass="secondary-button"/>
-            <Button fx:id="requestKeyButton" text="Request Key" onAction="#requestKey" styleClass="accent-button"/>
-        </HBox>
+    <center>
+        <VBox fx:id="mainPane" alignment="CENTER" spacing="20">
+            <padding>
+                <Insets top="30" bottom="30" left="40" right="40"/>
+            </padding>
 
-        <HBox fx:id="roomInfoPane" spacing="10" alignment="CENTER" visible="false" managed="false">
-            <TextField fx:id="roomLabel" text="Room: None" editable="false" styleClass="info-field"/>
-        </HBox>
+            <VBox fx:id="gamePane" spacing="15" alignment="TOP_CENTER"
+                  visible="true" managed="true" styleClass="card" prefWidth="400">
+                <Label text="--- JOIN ROOM ---" styleClass="form-label"/>
+                <HBox spacing="10" alignment="CENTER">
+                    <TextField fx:id="joinByCodeField" promptText="Nhập Room Code..." styleClass="form-field" HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="joinByCodeButton" text="Join" styleClass="secondary-button"/>
+                </HBox>
+            </VBox>
 
-        <VBox fx:id="canvasContainer" alignment="CENTER" styleClass="canvas-container"/>
+            <BorderPane fx:id="inRoomPane" visible="false" managed="false" styleClass="card"
+                        prefHeight="600" prefWidth="800">
 
-        <HBox fx:id="answerPane" spacing="10" alignment="CENTER" visible="false" managed="false">
-            <TextField fx:id="answerField" promptText="Enter answer..." styleClass="form-field"/>
-            <Button fx:id="sendAnswerButton" text="Send" onAction="#sendAnswer" styleClass="primary-button"/>
-        </HBox>
+                <top>
+                    <HBox alignment="CENTER_LEFT" spacing="10" styleClass="toolbar">
+                        <padding><Insets top="10" right="10" bottom="10" left="10"/></padding>
+                        <Label fx:id="lblRoomName" text="Tên phòng" styleClass="title-label"/>
+                        <Label fx:id="lblRoomCode" text="(Code: ???)" style="-fx-text-fill: #ccc;"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Button fx:id="btnCloseRoom" text="Đóng phòng" styleClass="danger" onAction="#handleCloseRoom"/>
+                        <Button fx:id="btnExitRoom" text="Thoát (Về sảnh)" onAction="#handleExitRoom"/>
+                    </HBox>
+                </top>
 
-        <HBox fx:id="puzzlePane" spacing="10" alignment="CENTER" visible="false" managed="false">
-            <TextField fx:id="puzzleAnswerField" promptText="Enter puzzle answer..." styleClass="form-field"/>
-            <Button fx:id="sendPuzzleButton" text="Send" onAction="#sendPuzzle" styleClass="primary-button"/>
-        </HBox>
-    </VBox>
+                <right>
+                    <VBox spacing="10" style="-fx-padding: 10;" prefWidth="320">
 
-    <!-- Tạo phòng -->
-    <VBox fx:id="createRoomPane" spacing="15" alignment="CENTER" visible="false" managed="false" styleClass="card">
-        <Label text="Create a new room" styleClass="title-label"/>
-        <HBox spacing="10" alignment="CENTER">
-            <Label text="Room Name:" styleClass="form-label"/>
-            <TextField fx:id="roomNameField" promptText="Enter room name" styleClass="form-field"/>
-        </HBox>
-        <HBox spacing="10">
-            <Button text="Create" onAction="#createRoom" styleClass="primary-button"/>
-            <Button text="Cancel" onAction="#showGamePane" styleClass="secondary-button"/>
-        </HBox>
-    </VBox>
+                        <HBox alignment="CENTER_LEFT" spacing="10">
+                            <Label text="Người chơi" styleClass="title-label"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Button fx:id="reloadPlayerListButton" text="🔄" styleClass="tool-button"/>
+                        </HBox>
+                        <VBox VBox.vgrow="NEVER" prefHeight="200">
+                            <ListView fx:id="playerListView" />
+                        </VBox>
 
-    <!-- Tham gia phòng -->
-    <VBox fx:id="joinRoomPane" spacing="15" alignment="CENTER" visible="false" managed="false" styleClass="card">
-        <Label text="Join a room" styleClass="title-label"/>
-        <HBox spacing="10" alignment="CENTER">
-            <Label text="Room ID:" styleClass="form-label"/>
-            <TextField fx:id="roomIdField" promptText="Enter room ID" styleClass="form-field"/>
-        </HBox>
-        <HBox spacing="10">
-            <Button text="Join" onAction="#joinRoom" styleClass="primary-button"/>
-            <Button text="Cancel" onAction="#showGamePane" styleClass="secondary-button"/>
-        </HBox>
-    </VBox>
-</VBox>
+                        <Separator/>
+
+                        <HBox fx:id="iconBarContainer" alignment="CENTER_LEFT" spacing="5" styleClass="toolbar" style="-fx-background-radius: 10;">
+                            <padding><Insets top="5" right="10" bottom="5" left="10"/></padding>
+                            <StackPane fx:id="chatIconBar">
+                                <Button fx:id="chatToggleButton" text="💬" styleClass="tool-button"/>
+                                <Circle fx:id="chatNotificationDot" radius="6" styleClass="notification-dot"
+                                        visible="false" managed="false" translateX="15" translateY="-10"/>
+                            </StackPane>
+                            <StackPane fx:id="videoIconBar">
+                                <Button fx:id="videoToggleButton" text="📷" styleClass="tool-button"/>
+                                <Circle fx:id="videoNotificationDot" radius="6" styleClass="notification-dot"
+                                        visible="false" managed="false" translateX="15" translateY="-10"/>
+                            </StackPane>
+                        </HBox>
+
+                        <VBox fx:id="chatWindowContainer" spacing="10" visible="false" managed="false" VBox.vgrow="ALWAYS">
+                            <HBox alignment="CENTER_LEFT" spacing="10">
+                                <Label text="Trò chuyện" styleClass="title-label"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button fx:id="closeChatButton" text="❌" styleClass="tool-button" style="-fx-background-color: transparent;"/>
+                            </HBox>
+                            <ScrollPane fx:id="emojiScrollPane" VBox.vgrow="NEVER"
+                                        visible="false" managed="false" prefHeight="100"
+                                        fitToWidth="true" style="-fx-background-color: #2c3e50;">
+                                <FlowPane fx:id="emojiFlowPane" hgap="5" vgap="5" style="-fx-padding: 5;"/>
+                            </ScrollPane>
+                            <ListView fx:id="chatMessagesListView" VBox.vgrow="ALWAYS" style="-fx-background-color: #3e4a5a;"/>
+                            <HBox spacing="5">
+                                <TextField fx:id="chatInputField" promptText="Nhập tin nhắn..." HBox.hgrow="ALWAYS" styleClass="form-field"/>
+                                <Button fx:id="emojiButton" text="😀" styleClass="tool-button" onAction="#handleEmojiButtonToggle"/>
+                                <Button fx:id="sendChatButton" text="Gửi" styleClass="primary-button"/>
+                            </HBox>
+                        </VBox>
+
+                    </VBox>
+                </right>
+
+                <center>
+                    <StackPane fx:id="centerStackPane">
+
+                        <BorderPane fx:id="canvasAndGuessArea">
+                            <center>
+                                <BorderPane fx:id="canvasHostPane" />
+                            </center>
+                            <bottom>
+                                <HBox spacing="10" alignment="CENTER" style="-fx-padding: 10;">
+                                    <TextField fx:id="puzzleAnswerField" promptText="Nhập đáp án..." styleClass="form-field" HBox.hgrow="ALWAYS"/>
+                                    <Button fx:id="sendPuzzleButton" text="Gửi câu đố" styleClass="primary-button"
+                                            onAction="#handleSendPuzzle"
+                                            visible="false" managed="false"/>
+                                    <Button fx:id="sendGuessButton" text="Gửi dự đoán" styleClass="primary-button"
+                                            onAction="#handleSendGuess"
+                                            visible="false" managed="false"/>
+                                </HBox>
+                            </bottom>
+                        </BorderPane>
+
+                        <VBox fx:id="videoWindowContainer" spacing="10" visible="false" managed="false" VBox.vgrow="ALWAYS"
+                              style="-fx-background-color: #2c3e50; -fx-padding: 10;">
+
+                            <HBox alignment="CENTER_LEFT" spacing="10">
+                                <Label text="Camera" styleClass="title-label"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button fx:id="closeVideoButton" text="Đóng Video ➔" styleClass="tool-button" style="-fx-background-color: transparent;"/>
+                            </HBox>
+
+                            <ScrollPane VBox.vgrow="ALWAYS" fitToWidth="true" style="-fx-background-color: #3e4a5a;">
+                                <FlowPane fx:id="videoGridPane" hgap="10" vgap="10" style="-fx-padding: 10; -fx-background-color: #3e4a5a;"/>
+                            </ScrollPane>
+
+                            <HBox alignment="CENTER" style="-fx-padding: 5;">
+                                <Button fx:id="toggleSelfCameraButton" text="Bật Camera" styleClass="primary-button"/>
+                            </HBox>
+                        </VBox>
+
+                    </StackPane>
+                </center>
+            </BorderPane>
+        </VBox>
+    </center>
+</BorderPane>

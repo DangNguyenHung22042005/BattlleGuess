@@ -23,7 +23,7 @@ public class DrawingPane extends Canvas {
     private boolean isDrawingEnabled = true;
 
     public DrawingPane() {
-        super(500, 500);
+        super(500, 400);
         getGraphicsContext2D().setFill(Color.WHITE);
         getGraphicsContext2D().fillRect(0, 0, getWidth(), getHeight());
         lines = new ArrayList<>();
@@ -228,10 +228,18 @@ public class DrawingPane extends Canvas {
     public void clearDrawing() {
         if (!isDrawingEnabled) return;
 
+        forceClearCanvas();
+    }
+
+    public void forceClearCanvas() {
         lines.clear();
         fillRegions.clear();
         getGraphicsContext2D().setFill(Color.WHITE);
         getGraphicsContext2D().fillRect(0, 0, getWidth(), getHeight());
+    }
+
+    public CanvasToolType getCurrentTool() {
+        return this.currentTool;
     }
 
     public void setCurrentColor(Color color) {
@@ -252,5 +260,26 @@ public class DrawingPane extends Canvas {
 
     public void setDrawingEnabled(boolean enabled) {
         this.isDrawingEnabled = enabled;
+    }
+
+    public boolean isCanvasBlank() {
+        return lines.isEmpty() && fillRegions.isEmpty();
+    }
+
+    public void loadPuzzleImage(byte[] imageData) {
+        if (imageData == null) return;
+
+        // Chuyển byte[] về Image
+        javafx.scene.image.Image image = new javafx.scene.image.Image(new java.io.ByteArrayInputStream(imageData));
+
+        // Xóa canvas cũ
+        lines.clear();
+        fillRegions.clear();
+
+        // Vẽ ảnh mới lên
+        GraphicsContext gc = getGraphicsContext2D();
+        gc.setFill(Color.WHITE);
+        gc.fillRect(0, 0, getWidth(), getHeight());
+        gc.drawImage(image, 0, 0);
     }
 }

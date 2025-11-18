@@ -13,6 +13,8 @@ module com.battleguess.battleguess {
     requires java.desktop;
     requires javafx.swing;
     requires java.sql;
+    requires jbcrypt;
+    requires webcam.capture;
 
     opens com.battleguess.battleguess to javafx.fxml;
     exports com.battleguess.battleguess;

@@ -75,11 +75,17 @@
     -fx-background-radius: 6;
 }
 
-.drawing-pane {
-    -fx-background-color: white;
-    -fx-border-color: #ccc;
-    -fx-border-radius: 10;
-    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0, 0, 3);
+.active-tool {
+    -fx-background-color: #3498db;
+    -fx-border-color: #f1c40f;
+    -fx-border-width: 2px;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
 }
 
+.notification-dot {
+    -fx-fill: #f02849;
+    -fx-stroke: #242526;
+    -fx-stroke-width: 2px;
+}
 

@@ -7,13 +7,25 @@
 <StackPane xmlns:fx="http://javafx.com/fxml" fx:controller="com.battleguess.battleguess.controller.LoginController">
     <VBox alignment="CENTER" spacing="20" maxWidth="400" style="-fx-background-color: linear-gradient(to bottom right, #2b5876, #4e4376); -fx-padding: 40; -fx-background-radius: 20; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 10,0,0,4)">
 
-        <Label text="🎨 BattleGuess Login" style="-fx-font-size: 22; -fx-text-fill: white; -fx-font-weight: bold;" />
+        <HBox spacing="10" alignment="CENTER_LEFT" maxWidth="Infinity">
+            <Label text="Port:" style="-fx-text-fill: white; -fx-min-width: 60;" />
+            <TextField fx:id="txtPort" promptText="Nhập Port Server" style="-fx-background-radius: 10; -fx-padding: 8;" HBox.hgrow="ALWAYS"/>
+        </HBox>
 
-        <TextField fx:id="txtUsername" promptText="Tên người chơi" style="-fx-background-radius: 10; -fx-padding: 8;"/>
-        <PasswordField fx:id="txtPassword" promptText="Mật khẩu" style="-fx-background-radius: 10; -fx-padding: 8;"/>
+        <HBox spacing="10" alignment="CENTER_LEFT" maxWidth="Infinity">
+            <Label text="Tên:" style="-fx-text-fill: white; -fx-min-width: 60;" />
+            <TextField fx:id="txtUsername" promptText="Tên người chơi" style="-fx-background-radius: 10; -fx-padding: 8;" HBox.hgrow="ALWAYS"/>
+        </HBox>
 
-        <Button text="Đăng nhập" onAction="#onLoginClicked" style="-fx-background-color: #00c6ff; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 10; -fx-padding: 8 16;"/>
-        <Button text="Đăng ký" onAction="#onRegisterClicked" style="-fx-background-color: transparent; -fx-text-fill: white; -fx-underline: true;"/>
+        <HBox spacing="10" alignment="CENTER_LEFT" maxWidth="Infinity">
+            <Label text="Mật khẩu:" style="-fx-text-fill: white; -fx-min-width: 60;" />
+            <PasswordField fx:id="txtPassword" promptText="Mật khẩu" style="-fx-background-radius: 10; -fx-padding: 8;" HBox.hgrow="ALWAYS"/>
+        </HBox>
+
+        <HBox spacing="10" alignment="CENTER" maxWidth="Infinity">
+            <Button text="Đăng nhập" onAction="#onLoginClicked" style="-fx-background-color: #00c6ff; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 10; -fx-padding: 8 16;"/>
+            <Button text="Đăng ký" onAction="#onRegisterClicked" style="-fx-background-color: transparent; -fx-text-fill: white; -fx-underline: true;"/>
+        </HBox>
 
         <Label fx:id="lblStatus" text="" style="-fx-text-fill: #ffdddd; -fx-font-size: 12;"/>
     </VBox>

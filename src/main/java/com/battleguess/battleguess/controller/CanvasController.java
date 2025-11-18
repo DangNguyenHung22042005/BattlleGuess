@@ -2,46 +2,29 @@ package com.battleguess.battleguess.controller;
 
 import com.battleguess.battleguess.canvas.DrawingPane;
 import com.battleguess.battleguess.enum_to_manage_string.CanvasToolType;
-import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
-import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.ColorPicker;
+import javafx.scene.control.Slider;
+import javafx.scene.image.WritableImage;
+import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 
 public class CanvasController {
-    @FXML
-    public DrawingPane drawingPane;
-    @FXML
-    private ChoiceBox<Double> pencilSize;
-    @FXML
-    private ChoiceBox<Double> eraserSize;
-    @FXML
-    private ColorPicker colorPicker;
-    @FXML
-    private Button pencilTool;
-    @FXML
-    private Button eraserTool;
-    @FXML
-    private Button fillTool;
-    @FXML
-    private Button toggleDrawing;
+    @FXML public DrawingPane drawingPane;
+    @FXML private Slider sizeSlider;
+    @FXML private ColorPicker colorPicker;
+    @FXML private Button pencilTool;
+    @FXML private Button eraserTool;
+    @FXML private Button fillTool;
+    @FXML private VBox toolsVBox;
+
     private boolean drawingEnabled = true;
 
     @FXML
     private void initialize() {
-        pencilSize.setItems(FXCollections.observableArrayList(1.0, 2.0, 3.0, 4.0, 5.0));
-        pencilSize.setValue(1.0);
-        pencilSize.setOnAction(event -> {
-            drawingPane.setCurrentStrokeSize(pencilSize.getValue());
-            selectPencilTool();
-        });
-
-        eraserSize.setItems(FXCollections.observableArrayList(5.0, 10.0, 15.0, 20.0, 25.0));
-        eraserSize.setValue(5.0);
-        eraserSize.setOnAction(event -> {
-            drawingPane.setEraserSize(eraserSize.getValue());
-            selectEraserTool();
+        sizeSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            updateSize(newVal.doubleValue());
         });
 
         colorPicker.setValue(Color.BLACK);
@@ -49,22 +32,30 @@ public class CanvasController {
             drawingPane.setCurrentColor(colorPicker.getValue());
         });
 
-        updateToggleButtonStyle();
+        colorPicker.setValue(Color.BLACK);
+        colorPicker.setOnAction(event -> {
+            drawingPane.setCurrentColor(colorPicker.getValue());
+        });
 
         selectPencilTool();
+    }
+
+    private void updateSize(double newSize) {
+        drawingPane.setCurrentStrokeSize(newSize);
+        drawingPane.setEraserSize(newSize);
     }
 
     @FXML
     private void selectPencilTool() {
         drawingPane.setCurrentTool(CanvasToolType.PENCIL);
-        drawingPane.setCurrentStrokeSize(pencilSize.getValue());
+        drawingPane.setCurrentStrokeSize(sizeSlider.getValue());
         setActiveButton(pencilTool);
     }
 
     @FXML
     private void selectEraserTool() {
         drawingPane.setCurrentTool(CanvasToolType.ERASER);
-        drawingPane.setEraserSize(eraserSize.getValue());
+        drawingPane.setEraserSize(sizeSlider.getValue());
         setActiveButton(eraserTool);
     }
 
@@ -81,23 +72,12 @@ public class CanvasController {
     }
 
     @FXML
-    private void clearDrawing() {
+    public void clearDrawing() {
         drawingPane.clearDrawing();
     }
 
-    @FXML
-    private void toggleDrawing() {
-        drawingEnabled = !drawingEnabled;
-        drawingPane.setDrawingEnabled(drawingEnabled);
-        toggleDrawing.setText(drawingEnabled ? "Disable Drawing" : "Enable Drawing");
-        updateToggleButtonStyle();
-    }
-
-    private void updateToggleButtonStyle() {
-        toggleDrawing.getStyleClass().remove("active-tool");
-        if (drawingEnabled) {
-            toggleDrawing.getStyleClass().add("active-tool");
-        }
+    public void forceClearDrawing() {
+        drawingPane.forceClearCanvas();
     }
 
     private void setActiveButton(Button activeButton) {
@@ -108,5 +88,30 @@ public class CanvasController {
         if (!activeButton.getStyleClass().contains("active-tool")) {
             activeButton.getStyleClass().add("active-tool");
         }
+    }
+
+    public void setDrawingEnabled(boolean enabled) {
+        drawingPane.setDrawingEnabled(enabled);
+    }
+
+    public WritableImage getSnapshot() {
+        WritableImage img = new WritableImage((int)drawingPane.getWidth(), (int)drawingPane.getHeight());
+        drawingPane.snapshot(null, img);
+        return img;
+    }
+
+    public void showTools(boolean show) {
+        if (toolsVBox != null) {
+            toolsVBox.setVisible(show);
+            toolsVBox.setManaged(show);
+        }
+    }
+
+    public boolean isCanvasBlank() {
+        return drawingPane.isCanvasBlank();
+    }
+
+    public void loadPuzzleImage(byte[] imageData) {
+        drawingPane.loadPuzzleImage(imageData);
     }
 }
