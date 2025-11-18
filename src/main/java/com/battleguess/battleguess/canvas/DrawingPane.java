@@ -23,7 +23,7 @@ public class DrawingPane extends Canvas {
     private boolean isDrawingEnabled = true;
 
     public DrawingPane() {
-        super(500, 400);
+        super(650, 400);
         getGraphicsContext2D().setFill(Color.WHITE);
         getGraphicsContext2D().fillRect(0, 0, getWidth(), getHeight());
         lines = new ArrayList<>();

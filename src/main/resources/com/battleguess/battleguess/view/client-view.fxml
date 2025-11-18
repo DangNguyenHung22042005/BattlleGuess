@@ -27,7 +27,7 @@
 
     <left>
         <VBox fx:id="leftNavPane" spacing="20" styleClass="card"
-              visible="false" managed="false" prefWidth="250">
+              visible="false" managed="false" prefWidth="350">
             <padding>
                 <Insets top="20" right="20" bottom="20" left="20"/>
             </padding>
@@ -114,6 +114,12 @@
                                 <Circle fx:id="videoNotificationDot" radius="6" styleClass="notification-dot"
                                         visible="false" managed="false" translateX="15" translateY="-10"/>
                             </StackPane>
+
+                            <StackPane fx:id="micIconBar">
+                                <Button fx:id="micToggleButton" text="🎙" styleClass="tool-button"/>
+                                <Circle fx:id="micNotificationDot" radius="6" styleClass="notification-dot"
+                                        visible="false" managed="false" translateX="15" translateY="-10"/>
+                            </StackPane>
                         </HBox>
 
                         <VBox fx:id="chatWindowContainer" spacing="10" visible="false" managed="false" VBox.vgrow="ALWAYS">
@@ -171,7 +177,8 @@
                                 <FlowPane fx:id="videoGridPane" hgap="10" vgap="10" style="-fx-padding: 10; -fx-background-color: #3e4a5a;"/>
                             </ScrollPane>
 
-                            <HBox alignment="CENTER" style="-fx-padding: 5;">
+                            <HBox alignment="CENTER" style="-fx-padding: 5;" spacing="10">
+                                <Button fx:id="toggleSelfMicButton" text="Bật Mic" styleClass="primary-button"/>
                                 <Button fx:id="toggleSelfCameraButton" text="Bật Camera" styleClass="primary-button"/>
                             </HBox>
                         </VBox>

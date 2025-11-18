@@ -18,7 +18,7 @@
     </stylesheets>
 
     <left>
-        <VBox fx:id="toolsVBox" spacing="15" alignment="TOP_CENTER" styleClass="toolbar" prefWidth="100">
+        <VBox fx:id="toolsVBox" spacing="15" alignment="TOP_CENTER" styleClass="toolbar" prefWidth="130">
             <padding>
                 <Insets top="10" right="10" bottom="10" left="10"/>
             </padding>
@@ -47,7 +47,7 @@
     </left>
 
     <center>
-        <DrawingPane fx:id="drawingPane" width="500" height="400"/>
+        <DrawingPane fx:id="drawingPane" width="650" height="400"/>
     </center>
 
 </BorderPane>

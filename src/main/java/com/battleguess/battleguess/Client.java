@@ -1,6 +1,7 @@
 package com.battleguess.battleguess;
 
 import com.battleguess.battleguess.enum_to_manage_string.MessageType;
+import com.battleguess.battleguess.network.response.AudioFramePayload;
 import com.battleguess.battleguess.network.response.GenericResponsePayload;
 import com.battleguess.battleguess.network.Packet;
 import com.battleguess.battleguess.network.response.VideoFramePayload;
@@ -26,6 +27,9 @@ public class Client {
 
     private DatagramSocket udpSocket;
     private SocketAddress serverUdpAddress; // Địa chỉ UDP của SERVER
+
+    private static final int UDP_PACKET_TYPE_VIDEO = 1;
+    private static final int UDP_PACKET_TYPE_AUDIO = 2;
 
     public Client(String host, int port, Consumer<Packet> messageHandler) throws IOException {
         this.messageHandler = messageHandler;
@@ -79,17 +83,17 @@ public class Client {
         });
     }
 
-    public void sendUdpFrame(int playerID, int roomID, byte[] frameData) {
+    public void sendUdpData(int packetType, int playerID, int roomID, byte[] frameData) {
         if (udpSocket == null || !isRunning) return;
 
-        // Chuẩn bị header (ID người gửi + ID phòng)
-        ByteBuffer buffer = ByteBuffer.allocate(8 + frameData.length);
-        buffer.putInt(playerID);
-        buffer.putInt(roomID);
-        buffer.put(frameData);
+        // Header MỚI (12 bytes)
+        ByteBuffer buffer = ByteBuffer.allocate(12 + frameData.length);
+        buffer.putInt(packetType); // 1. Type (Video/Audio)
+        buffer.putInt(playerID);   // 2. Sender
+        buffer.putInt(roomID);     // 3. Room
+        buffer.put(frameData);     // 4. Data
         byte[] data = buffer.array();
 
-        // Gửi (không cần thread riêng vì UDP không blocking)
         try {
             DatagramPacket packet = new DatagramPacket(data, data.length, serverUdpAddress);
             udpSocket.send(packet);
@@ -128,26 +132,34 @@ public class Client {
             while (isRunning) {
                 try {
                     DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-                    udpSocket.receive(packet); // Chờ (blocking)
+                    udpSocket.receive(packet);
 
                     byte[] data = Arrays.copyOf(packet.getData(), packet.getLength());
 
-                    // --- SỬA LỖI Ở ĐÂY ---
-                    // Phải kiểm tra gói tin rác (hole punch)
-                    if (data.length <= 1) {
-                        continue; // Bỏ qua, đây là gói dummy
+                    if (data.length <= 1) { continue; } // Bỏ qua "đục lỗ"
+
+                    // Đọc Header MỚI (Server nhét vào)
+                    ByteBuffer bb = ByteBuffer.wrap(data);
+                    int packetType = bb.getInt(); // 4 byte đầu
+                    int senderID = bb.getInt();   // 4 byte tiếp
+                    byte[] payloadData = new byte[data.length - 8];
+                    bb.get(payloadData);
+
+                    Packet internalPacket = null;
+
+                    // --- PHÂN LOẠI GÓI TIN ---
+                    if (packetType == UDP_PACKET_TYPE_VIDEO) {
+                        VideoFramePayload payload = new VideoFramePayload(senderID, payloadData);
+                        internalPacket = new Packet(MessageType.VIDEO_FRAME_BROADCAST, payload);
+                    } else if (packetType == UDP_PACKET_TYPE_AUDIO) {
+                        AudioFramePayload payload = new AudioFramePayload(senderID, payloadData);
+                        internalPacket = new Packet(MessageType.AUDIO_FRAME_BROADCAST, payload);
                     }
 
-                    // Đọc header (Server nhét vào)
-                    ByteBuffer bb = ByteBuffer.wrap(data);
-                    int senderID = bb.getInt();
-                    byte[] frameData = new byte[data.length - 4];
-                    bb.get(frameData);
-
-                    VideoFramePayload payload = new VideoFramePayload(senderID, frameData);
-                    Packet internalPacket = new Packet(MessageType.VIDEO_FRAME_BROADCAST, payload);
-
-                    Platform.runLater(() ->messageHandler.accept(internalPacket));
+                    if (internalPacket != null) {
+                        Packet finalInternalPacket = internalPacket;
+                        Platform.runLater(() -> messageHandler.accept(finalInternalPacket));
+                    }
 
                 } catch (IOException e) {
                     if (isRunning) e.printStackTrace();
@@ -156,10 +168,6 @@ public class Client {
         }).start();
     }
 
-    /**
-     * Gửi một gói UDP "rỗng" (1 byte) để "đục lỗ" (Hole Punching)
-     * cho firewall/NAT của client.
-     */
     public void sendDummyUdpPacket() {
         if (udpSocket == null || !isRunning) return;
         try {

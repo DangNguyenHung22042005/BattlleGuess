@@ -10,6 +10,7 @@ import com.battleguess.battleguess.network.response.*;
 import com.battleguess.battleguess.model.RoomInfo;
 import com.github.sarxos.webcam.Webcam;
 import com.github.sarxos.webcam.WebcamResolution;
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
@@ -26,7 +27,6 @@ import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
-
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -37,8 +37,10 @@ import javafx.scene.control.*;
 import javafx.scene.shape.Circle;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
+import javafx.util.Duration;
 
 import javax.imageio.ImageIO;
+import javax.sound.sampled.*;
 import java.util.*;
 
 public class ClientController {
@@ -78,9 +80,13 @@ public class ClientController {
     @FXML private Button toggleSelfCameraButton;
     @FXML private Button videoToggleButton;
     @FXML private Circle videoNotificationDot;
-    @FXML private StackPane centerStackPane; // Vỏ bọc ở giữa
-    @FXML private BorderPane canvasAndGuessArea; // Vỏ bọc canvas
-    @FXML private StackPane videoIconBar; // (Sửa lại: Gói StackPane)
+    @FXML private StackPane centerStackPane;
+    @FXML private BorderPane canvasAndGuessArea;
+    @FXML private StackPane videoIconBar;
+    @FXML private StackPane micIconBar;
+    @FXML private Button micToggleButton;
+    @FXML private Circle micNotificationDot;
+    @FXML private Button toggleSelfMicButton;
 
     private CanvasController activeCanvasController;
     private Client client;
@@ -108,6 +114,24 @@ public class ClientController {
     private Task<Void> webcamTask;
     private boolean isMyCameraOn = false;
     private Map<Integer, VideoTile> videoTiles = new HashMap<>();
+
+    private static AudioFormat AUDIO_FORMAT;
+    private Task<Void> audioSendTask;
+    private Map<Integer, SourceDataLine> audioPlaybackLines = new HashMap<>();
+    private boolean isMyMicOn = false;
+
+    private static final int UDP_PACKET_TYPE_VIDEO = 1;
+    private static final int UDP_PACKET_TYPE_AUDIO = 2;
+
+    public ClientController() {
+        AUDIO_FORMAT = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED,
+                8000.0f, // 8kHz
+                16,      // 16 bit
+                1,       // Mono
+                2,       // 2 bytes/frame
+                8000.0f, // 8k frames/giây
+                false);  // Little-endian
+    }
 
     public void initData(int playerID, String username, Client connectedClient) {
         this.playerID = playerID;
@@ -154,10 +178,12 @@ public class ClientController {
         chatToggleButton.setOnAction(e -> showChatWindow(true));
         closeChatButton.setOnAction(e -> showChatWindow(false));
 
-        // --- LOGIC VIDEO ---
         videoToggleButton.setOnAction(e -> showVideoWindow(true));
         closeVideoButton.setOnAction(e -> showVideoWindow(false));
         toggleSelfCameraButton.setOnAction(e -> toggleMyCamera());
+
+        micToggleButton.setOnAction(e -> showVideoWindow(true));
+        toggleSelfMicButton.setOnAction(e -> toggleMyMic());
     }
 
     @FXML
@@ -358,6 +384,29 @@ public class ClientController {
         }
     }
 
+    private void toggleMyMic() {
+        isMyMicOn = !isMyMicOn;
+
+        // 1. Gửi lệnh TCP
+        MicStatusUpdatePayload payload = new MicStatusUpdatePayload(playerID, currentRoomID, isMyMicOn);
+        client.sendMessage(new Packet(MessageType.MIC_STATUS_UPDATE, payload));
+
+        if (isMyMicOn) {
+            // --- BẬT MIC ---
+            toggleSelfMicButton.setText("Tắt Mic");
+            toggleSelfMicButton.getStyleClass().add("danger");
+            startAudioSendTask(); // Bắt đầu luồng gửi âm thanh
+        } else {
+            // --- TẮT MIC ---
+            toggleSelfMicButton.setText("Bật Mic");
+            toggleSelfMicButton.getStyleClass().remove("danger");
+            if (audioSendTask != null) {
+                audioSendTask.cancel(true); // Dừng luồng
+                audioSendTask = null;
+            }
+        }
+    }
+
     private void startWebcamTask() {
         if (webcamTask != null) webcamTask.cancel(true);
 
@@ -397,7 +446,7 @@ public class ClientController {
                     ImageIO.write(awtImage, "JPG", baos);
                     byte[] frameData = baos.toByteArray();
 
-                    client.sendUdpFrame(playerID, currentRoomID, frameData);
+                    client.sendUdpData(UDP_PACKET_TYPE_VIDEO, playerID, currentRoomID, frameData);
 
                     Image fxImage = new Image(new ByteArrayInputStream(frameData));
                     Platform.runLater(() -> updateVideoFeed(playerID, fxImage, true));
@@ -418,6 +467,50 @@ public class ClientController {
         });
 
         new Thread(webcamTask).start();
+    }
+
+    private void startAudioSendTask() {
+        if (audioSendTask != null) audioSendTask.cancel(true);
+
+        audioSendTask = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                TargetDataLine microphone;
+                try {
+                    microphone = AudioSystem.getTargetDataLine(AUDIO_FORMAT);
+                    DataLine.Info info = new DataLine.Info(TargetDataLine.class, AUDIO_FORMAT);
+                    microphone = (TargetDataLine) AudioSystem.getLine(info);
+                    microphone.open(AUDIO_FORMAT);
+                } catch (LineUnavailableException e) {
+                    Platform.runLater(() -> showAlert("Lỗi Mic", "Không thể mở micro."));
+                    return null;
+                }
+
+                microphone.start();
+                byte[] buffer = new byte[1024]; // Gói 1024 byte
+
+                while (!isCancelled()) {
+                    int bytesRead = microphone.read(buffer, 0, buffer.length);
+                    if (bytesRead > 0) {
+                        // Gửi âm thanh bằng UDP
+                        client.sendUdpData(UDP_PACKET_TYPE_AUDIO, playerID, currentRoomID, buffer);
+                    }
+                }
+
+                // Dọn dẹp
+                microphone.stop();
+                microphone.close();
+                return null;
+            }
+        };
+
+        audioSendTask.setOnFailed(e -> {
+            Platform.runLater(() -> {
+                if (isMyMicOn) toggleMyMic(); // Tự reset nếu lỗi
+            });
+        });
+
+        new Thread(audioSendTask).start();
     }
 
     private void updateVideoFeed(int feedPlayerID, Image image, boolean isCameraOn) {
@@ -443,6 +536,33 @@ public class ClientController {
             tile.updateImage(image);
         } else {
             tile.setCameraOff(); // <-- FIX LỖI "ĐỨNG HÌNH"
+        }
+    }
+
+    private void playAudioData(int senderID, byte[] audioData) {
+        try {
+            SourceDataLine speaker = audioPlaybackLines.get(senderID);
+
+            // Nếu là người nói mới, tạo Loa mới cho họ
+            if (speaker == null) {
+                DataLine.Info info = new DataLine.Info(SourceDataLine.class, AUDIO_FORMAT);
+                speaker = (SourceDataLine) AudioSystem.getLine(info);
+                speaker.open(AUDIO_FORMAT);
+                speaker.start();
+                audioPlaybackLines.put(senderID, speaker);
+            }
+
+            // Ghi (phát) âm thanh ra loa
+            speaker.write(audioData, 0, audioData.length);
+
+            // --- LOGIC HIGHLIGHT (YÊU CẦU 3) ---
+            VideoTile tile = videoTiles.get(senderID);
+            if (tile != null) {
+                tile.setSpeaking(true); // Bật sáng
+            }
+
+        } catch (LineUnavailableException e) {
+            e.printStackTrace();
         }
     }
 
@@ -711,6 +831,25 @@ public class ClientController {
                 VideoFramePayload framePayload = (VideoFramePayload) packet.getData();
                 Image receivedImage = new Image(new ByteArrayInputStream(framePayload.getFrameData()));
                 updateVideoFeed(framePayload.getPlayerID(), receivedImage, true);
+                break;
+
+            case AUDIO_FRAME_BROADCAST: // (Từ luồng UDP)
+                AudioFramePayload audioPayload = (AudioFramePayload) packet.getData();
+                playAudioData(audioPayload.getSenderID(), audioPayload.getAudioData());
+                break;
+
+            case PLAYER_MIC_STATUS_UPDATE:
+                PlayerMicStatusPayload micStatus = (PlayerMicStatusPayload) packet.getData();
+                if (micStatus.getPlayerID() != this.playerID) {
+                    // Nếu người khác tắt mic, ta phải DỪNG loa của họ
+                    if (!micStatus.isMicOn()) {
+                        SourceDataLine speaker = audioPlaybackLines.remove(micStatus.getPlayerID());
+                        if (speaker != null) {
+                            speaker.stop();
+                            speaker.close();
+                        }
+                    }
+                }
                 break;
 
             case ERROR:
@@ -1071,7 +1210,9 @@ public class ClientController {
     private class VideoTile extends VBox {
         private ImageView imageView;
         private Label nameLabel;
-        private ObjectProperty<Image> imageProperty; // Dùng để binding
+        private ObjectProperty<Image> imageProperty;
+        private StackPane stack;
+        private PauseTransition speakingTimer;
 
         public VideoTile(String playerName) {
             super();
@@ -1093,22 +1234,37 @@ public class ClientController {
             nameLabel = new Label(playerName);
             nameLabel.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 5; -fx-background-color: rgba(0,0,0,0.5);");
 
-            // 4. Dùng StackPane để đè tên lên ảnh
-            StackPane stack = new StackPane(imageView, nameLabel);
-            StackPane.setAlignment(nameLabel, Pos.BOTTOM_LEFT); // Đặt tên ở góc dưới bên trái
-
+            // 4. Dùng StackPane
+            stack = new StackPane(imageView, nameLabel);
+            StackPane.setAlignment(nameLabel, Pos.BOTTOM_LEFT);
             this.getChildren().add(stack);
+
+            // 5. Khởi tạo Timer (200ms)
+            speakingTimer = new PauseTransition(Duration.millis(200));
+            speakingTimer.setOnFinished(e -> {
+                // Khi timer kết thúc, xóa viền
+                this.setStyle("-fx-background-color: #222; -fx-background-radius: 10; -fx-border-radius: 10; -fx-border-color: #555;");
+            });
         }
 
-        /** Cập nhật khung hình video mới */
         public void updateImage(Image image) {
             Platform.runLater(() -> imageProperty.set(image));
         }
 
-        /** Hiển thị placeholder khi tắt cam (Fix lỗi "đứng hình") */
         public void setCameraOff() {
             // Set về null (rỗng)
             Platform.runLater(() -> imageProperty.set(null));
+        }
+
+        public void setSpeaking(boolean isSpeaking) {
+            Platform.runLater(() -> {
+                if (isSpeaking) {
+                    // Đặt style viền xanh
+                    this.setStyle("-fx-background-color: #222; -fx-background-radius: 10; -fx-border-radius: 10; -fx-border-color: #2ecc71; -fx-border-width: 3;");
+                    // Reset timer
+                    speakingTimer.playFromStart();
+                }
+            });
         }
     }
 }

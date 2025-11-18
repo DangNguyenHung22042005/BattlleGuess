@@ -25,7 +25,7 @@ public class LoginController {
     @FXML private Label lblStatus;
     @FXML private TextField txtPort;
 
-    private String ipAddress = "localhost";
+    private String ipAddress = "localhost"; //localhost //192.168.1.21
     private Client client;
 
     @FXML
@@ -52,7 +52,6 @@ public class LoginController {
         client.sendMessage(new Packet(MessageType.REGISTER_REQUEST, payload));
     }
 
-
     private boolean isInputValid(String username, String password) {
         if (username.isEmpty() || password.isEmpty()) {
             setStatus("Tên và mật khẩu không được để trống!", true);
@@ -76,7 +75,6 @@ public class LoginController {
 
         return true;
     }
-
 
     private void setStatus(String message, boolean isError) {
         lblStatus.setText(message);

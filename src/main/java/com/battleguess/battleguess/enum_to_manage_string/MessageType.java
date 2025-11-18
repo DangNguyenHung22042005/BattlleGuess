@@ -74,5 +74,9 @@ public enum MessageType {
 
     VIDEO_FRAME_BROADCAST,      // (UDP Receiver -> ClientController) Gói tin "nội bộ"
 
+    MIC_STATUS_UPDATE,          // (Client -> Server) Báo tôi Bật/Tắt mic
+    PLAYER_MIC_STATUS_UPDATE,   // (Server -> All) Báo Player A Bật/Tắt mic (cho UI)
+    AUDIO_FRAME_BROADCAST,      // (UDP Receiver -> ClientController) Gói tin "nội bộ"
+
     ERROR;
 }

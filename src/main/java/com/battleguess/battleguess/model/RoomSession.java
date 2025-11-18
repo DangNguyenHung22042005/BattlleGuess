@@ -18,6 +18,7 @@ public class RoomSession {
     private Map<Integer, ObjectOutputStream> clientStreams = new ConcurrentHashMap<>();
     private String correctAnswer;
     private Set<Integer> playersWithCameraOn = ConcurrentHashMap.newKeySet();
+    private Set<Integer> playersWithMicOn = ConcurrentHashMap.newKeySet();
     private Map<Integer, SocketAddress> playerUdpAddresses = new ConcurrentHashMap<>();
 
     public RoomSession(RoomInfo roomInfo, int ownerPlayerID, List<PlayerState> initialMembers) {
@@ -61,9 +62,9 @@ public class RoomSession {
         if (state != null) {
             PlayerState newState = new PlayerState(playerID, state.getUsername(), state.getScore(), state.isOwner(), false);
             players.put(playerID, newState); // Cập nhật trạng thái "Offline"
-            clientStreams.remove(playerID); // Xóa stream
-            playerUdpAddresses.remove(playerID);
         }
+        clientStreams.remove(playerID); // Xóa stream
+        playerUdpAddresses.remove(playerID);
     }
 
     public PlayerState playerKick(int playerID) {
@@ -146,5 +147,13 @@ public class RoomSession {
     public void setPlayerCameraStatus(int playerID, boolean isCameraOn) {
         if (isCameraOn) { playersWithCameraOn.add(playerID); }
         else { playersWithCameraOn.remove(playerID); }
+    }
+
+    public void setPlayerMicStatus(int playerID, boolean isMicOn) {
+        if (isMicOn) {
+            playersWithMicOn.add(playerID);
+        } else {
+            playersWithMicOn.remove(playerID);
+        }
     }
 }

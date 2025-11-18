@@ -38,6 +38,9 @@ public class Server implements Runnable {
     private Map<SocketAddress, Integer> udpAddrToPlayerID = new ConcurrentHashMap<>();
     private Map<Integer, SocketAddress> playerUdpAddressStore = new ConcurrentHashMap<>();
 
+    private static final int UDP_PACKET_TYPE_VIDEO = 1;
+    private static final int UDP_PACKET_TYPE_AUDIO = 2;
+
     public Server(int port) throws IOException {
         this.port = port;
         this.running = false;
@@ -47,16 +50,7 @@ public class Server implements Runnable {
             e.printStackTrace();
             throw new IOException("Failed to connect to Database.");
         }
-        createServerSocket(); // Mở TCP
-
-        // --- MỞ CỔNG UDP ---
-        try {
-            this.udpSocket = new DatagramSocket(UDP_PORT);
-            System.out.println("UDP Reflector started on port " + UDP_PORT);
-            startUdpReflector(); // Bắt đầu luồng UDP
-        } catch (Exception e) {
-            throw new IOException("Failed to start UDP socket: " + e.getMessage());
-        }
+        createServerSocket();
     }
 
     private void createServerSocket() throws IOException {
@@ -78,6 +72,16 @@ public class Server implements Runnable {
                 thread = new Thread(this);
                 thread.start();
                 System.out.println("Server started on port " + port);
+
+                // 2. KHỞI ĐỘNG UDP (DI CHUYỂN VÀO ĐÂY)
+                try {
+                    this.udpSocket = new DatagramSocket(UDP_PORT);
+                    System.out.println("UDP Reflector started on port " + UDP_PORT);
+                    startUdpReflector(); // <-- GỌI Ở ĐÂY (khi running = true)
+                } catch (Exception e) {
+                    running = false; // Tắt lại nếu UDP lỗi
+                    throw new RuntimeException("Failed to start UDP socket: " + e.getMessage());
+                }
             } catch (IOException e) {
                 running = false;
                 throw new RuntimeException("Failed to start server on port " + port + ": " + e.getMessage());
@@ -94,6 +98,9 @@ public class Server implements Runnable {
                 }
                 if (thread != null) {
                     thread.interrupt();
+                }
+                if (udpSocket != null && !udpSocket.isClosed()) {
+                    udpSocket.close(); // Gây ra IOException để luồng UDP thoát
                 }
                 System.out.println("Server stopped on port " + port);
             } catch (IOException e) {
@@ -137,42 +144,33 @@ public class Server implements Runnable {
                     DatagramPacket udpPacket = new DatagramPacket(buffer, buffer.length);
                     udpSocket.receive(udpPacket);
 
-                    SocketAddress senderAddress = udpPacket.getSocketAddress();
                     byte[] data = Arrays.copyOf(udpPacket.getData(), udpPacket.getLength());
 
-                    // --- SỬA LỖI Ở ĐÂY ---
-                    // Kiểm tra gói tin rác (hole punch)
-                    if (data.length <= 1) {
-                        System.out.println("Dummy packet received from " + senderAddress + ". Ignoring.");
-                        continue; // Bỏ qua, không phản xạ
-                    }
+                    if (data.length <= 1) { continue; } // Bỏ qua "đục lỗ"
 
+                    // --- HEADER MỚI (12 bytes) ---
                     ByteBuffer bb = ByteBuffer.wrap(data);
-                    int senderID = bb.getInt();
-                    int roomID = bb.getInt();
+                    int packetType = bb.getInt(); // 4 byte ĐẦU TIÊN
+                    int senderID = bb.getInt();   // 4 byte tiếp
+                    int roomID = bb.getInt();     // 4 byte tiếp
 
-                    // --- THÊM LOGIC "HỌC" ĐỊA CHỈ (QUAN TRỌNG) ---
-                    // "Học" địa chỉ UDP của client từ gói tin đầu tiên
-                    if (!playerUdpAddressStore.containsKey(senderID)) {
-                        playerUdpAddressStore.put(senderID, senderAddress);
-                    }
-                    // Cũng cập nhật nó vào session
                     RoomSession session = activeRooms.get(roomID);
-                    if (session != null) {
-                        session.registerUdpAddress(senderID, senderAddress);
-                    } else {
-                        continue; // Bỏ qua nếu phòng không active
-                    }
-                    // --- HẾT PHẦN THÊM ---
+                    if (session == null) { continue; }
 
-                    byte[] frameData = new byte[data.length - 8];
-                    bb.get(frameData);
+                    // Lấy data (phần còn lại)
+                    byte[] payloadData = new byte[data.length - 12];
+                    bb.get(payloadData);
 
-                    // ... (Phần logic broadcast/reflect còn lại giữ nguyên)
-                    ByteBuffer broadcastBuffer = ByteBuffer.allocate(4 + frameData.length);
-                    broadcastBuffer.putInt(senderID);
-                    broadcastBuffer.put(frameData);
+                    // Gói lại tin để broadcast (Header MỚI)
+                    ByteBuffer broadcastBuffer = ByteBuffer.allocate(8 + payloadData.length);
+                    broadcastBuffer.putInt(packetType); // Gói lại Type
+                    broadcastBuffer.putInt(senderID);   // Gói lại Sender
+                    broadcastBuffer.put(payloadData);   // Gói lại Data (Audio/Video)
                     byte[] broadcastData = broadcastBuffer.array();
+
+                    // Gửi (Reflect)
+                    System.out.println("[UDP REFLECT] Room " + roomID + " Type " + packetType + " from " + senderID +
+                            ". Targets: " + session.getUdpAddresses());
 
                     for (Map.Entry<Integer, SocketAddress> entry : session.getUdpAddresses().entrySet()) {
                         if (entry.getKey() != senderID) {
@@ -315,6 +313,11 @@ public class Server implements Runnable {
                     case CAMERA_STATUS_UPDATE:
                         CameraStatusUpdatePayload camPayload = (CameraStatusUpdatePayload) packet.getData();
                         handleCameraStatusUpdate(camPayload);
+                        break;
+
+                    case MIC_STATUS_UPDATE:
+                        MicStatusUpdatePayload micPayload = (MicStatusUpdatePayload) packet.getData();
+                        handleMicStatusUpdate(micPayload);
                         break;
                 }
             }
@@ -637,15 +640,13 @@ public class Server implements Runnable {
         RoomJoinSuccessPayload joinSuccessPayload = new RoomJoinSuccessPayload(session.getRoomInfo(), currentStates);
         out.writeObject(new Packet(MessageType.ROOM_JOIN_SUCCESS, joinSuccessPayload));
 
+        PlayerUdpListPayload listPayload = new PlayerUdpListPayload(session.getUdpAddresses());
+        //out.writeObject(new Packet(MessageType.PLAYER_UDP_LIST_UPDATE, listPayload));
+        session.broadcast(new Packet(MessageType.PLAYER_UDP_LIST_UPDATE, listPayload));
+
         RoomStateUpdatePayload roomStateUpdatePayload = new RoomStateUpdatePayload(session.getRoomInfo(), currentStates);
         session.broadcast(new Packet(MessageType.ROOM_STATE_UPDATE, roomStateUpdatePayload));
 
-        // 3. Gửi danh sách UDP (TCP)
-        PlayerUdpListPayload listPayload = new PlayerUdpListPayload(session.getUdpAddresses());
-        out.writeObject(new Packet(MessageType.PLAYER_UDP_LIST_UPDATE, listPayload));
-
-        // 4. Cập nhật cho người cũ
-        session.broadcast(new Packet(MessageType.PLAYER_UDP_LIST_UPDATE, listPayload));
     }
 
     private void handleCameraStatusUpdate(CameraStatusUpdatePayload payload) throws IOException {
@@ -656,6 +657,16 @@ public class Server implements Runnable {
 
         PlayerCameraStatusPayload statusPayload = new PlayerCameraStatusPayload(payload.getPlayerID(), payload.isCameraOn());
         session.broadcast(new Packet(MessageType.PLAYER_CAMERA_STATUS_UPDATE, statusPayload));
+    }
+
+    private void handleMicStatusUpdate(MicStatusUpdatePayload payload) throws IOException {
+        RoomSession session = activeRooms.get(payload.getRoomID());
+        if (session == null) return;
+
+        session.setPlayerMicStatus(payload.getPlayerID(), payload.isMicOn());
+
+        PlayerMicStatusPayload statusPayload = new PlayerMicStatusPayload(payload.getPlayerID(), payload.isMicOn());
+        session.broadcast(new Packet(MessageType.PLAYER_MIC_STATUS_UPDATE, statusPayload));
     }
 
     private void handleExitSession(int playerID, int roomID) {
