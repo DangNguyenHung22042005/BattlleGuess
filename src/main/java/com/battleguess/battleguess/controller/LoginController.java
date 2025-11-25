@@ -21,11 +21,11 @@ import java.io.IOException;
 
 public class LoginController {
     @FXML private TextField txtUsername;
-    @FXML private PasswordField txtPassword;
-    @FXML private Label lblStatus;
     @FXML private TextField txtPort;
+    @FXML private Label lblStatus;
+    @FXML private PasswordField txtPassword;
 
-    private String ipAddress = "localhost"; //localhost //192.168.1.21
+    private String ipAddress = "localhost"; //localhost //192.168.1.21 //192.168.203.205
     private Client client;
 
     @FXML

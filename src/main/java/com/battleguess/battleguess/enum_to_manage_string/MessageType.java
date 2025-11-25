@@ -33,7 +33,7 @@ public enum MessageType {
     JOIN_REQUEST_RESPONSE,       // (Owner -> Server) Chủ phòng đồng ý/từ chối
     JOIN_DENIED,                 // (Server -> Client) Thông báo bị từ chối
 
-    // --- PHẢN HỒI CHO LOGIC MỚI ---
+    // --- PHẢN HỒI CHO LOGIC JOIN ---
     GET_ACTIVE_ROOM_IDS_RESPONSE,// (Server) Gửi danh sách ID các phòng đang mở
     JOIN_BY_CODE_FAILED,         // (Server -> Client) Báo lỗi (VD: code sai)
 
@@ -58,11 +58,12 @@ public enum MessageType {
     ROOM_NOW_ACTIVE,          // (Broadcast) Báo cho sảnh biết 1 phòng vừa mở
     ROOM_NOW_INACTIVE,        // (Broadcast) Báo cho sảnh biết 1 phòng vừa đóng
 
-    // --- LOGIC GAME CHÍNH (MỚI) ---
+    // --- LOGIC GAME CHÍNH ---
     SEND_PUZZLE_REQUEST,        // (Owner -> Server) Gửi câu đố + đáp án
     PUZZLE_BROADCAST,           // (Server -> Guessers) Gửi hình ảnh cho người đoán
     SEND_GUESS_REQUEST,         // (Guesser -> Server) Gửi dự đoán
     ANSWER_CORRECT_BROADCAST,   // (Server -> All) Báo có người đoán đúng
+    ANSWER_WRONG_BROADCAST,
 
     SEND_CHAT_MESSAGE_REQUEST,      // (Client -> Server)
     CHAT_MESSAGE_BROADCAST,       // (Server -> All Clients)

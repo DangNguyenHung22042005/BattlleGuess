@@ -19,8 +19,6 @@ public class CanvasController {
     @FXML private Button fillTool;
     @FXML private VBox toolsVBox;
 
-    private boolean drawingEnabled = true;
-
     @FXML
     private void initialize() {
         sizeSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
@@ -38,11 +36,6 @@ public class CanvasController {
         });
 
         selectPencilTool();
-    }
-
-    private void updateSize(double newSize) {
-        drawingPane.setCurrentStrokeSize(newSize);
-        drawingPane.setEraserSize(newSize);
     }
 
     @FXML
@@ -80,6 +73,23 @@ public class CanvasController {
         drawingPane.forceClearCanvas();
     }
 
+    public void setDrawingEnabled(boolean enabled) {
+        drawingPane.setDrawingEnabled(enabled);
+    }
+
+    private void updateSize(double newSize) {
+        drawingPane.setCurrentStrokeSize(newSize);
+        drawingPane.setEraserSize(newSize);
+    }
+
+    public boolean isCanvasBlank() {
+        return drawingPane.isCanvasBlank();
+    }
+
+    public void loadPuzzleImage(byte[] imageData) {
+        drawingPane.loadPuzzleImage(imageData);
+    }
+
     private void setActiveButton(Button activeButton) {
         pencilTool.getStyleClass().remove("active-tool");
         eraserTool.getStyleClass().remove("active-tool");
@@ -88,10 +98,6 @@ public class CanvasController {
         if (!activeButton.getStyleClass().contains("active-tool")) {
             activeButton.getStyleClass().add("active-tool");
         }
-    }
-
-    public void setDrawingEnabled(boolean enabled) {
-        drawingPane.setDrawingEnabled(enabled);
     }
 
     public WritableImage getSnapshot() {
@@ -105,13 +111,5 @@ public class CanvasController {
             toolsVBox.setVisible(show);
             toolsVBox.setManaged(show);
         }
-    }
-
-    public boolean isCanvasBlank() {
-        return drawingPane.isCanvasBlank();
-    }
-
-    public void loadPuzzleImage(byte[] imageData) {
-        drawingPane.loadPuzzleImage(imageData);
     }
 }

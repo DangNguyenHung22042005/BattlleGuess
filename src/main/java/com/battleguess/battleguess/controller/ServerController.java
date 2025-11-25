@@ -10,10 +10,8 @@ import javafx.util.Callback;
 import java.io.IOException;
 
 public class ServerController {
-    @FXML
-    private TextField portField;
-    @FXML
-    private ListView<Server> serverList;
+    @FXML private TextField portField;
+    @FXML private ListView<Server> serverList;
 
     private ObservableList<Server> servers;
 

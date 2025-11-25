@@ -1,7 +1,6 @@
 package com.battleguess.battleguess.database;
 
 import java.sql.*;
-
 import com.battleguess.battleguess.model.PlayerState;
 import com.battleguess.battleguess.model.RoomInfo;
 import java.util.ArrayList;

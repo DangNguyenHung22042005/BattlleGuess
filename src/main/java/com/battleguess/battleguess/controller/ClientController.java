@@ -38,124 +38,77 @@ import javafx.scene.shape.Circle;
 import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 import javafx.util.Duration;
-
 import javax.imageio.ImageIO;
 import javax.sound.sampled.*;
 import java.util.*;
 
 public class ClientController {
-    @FXML private VBox canvasContainer, gamePane, joinRoomPane, connectPane;
-    @FXML private TextField nameField, portField, roomNameField, roomIdField, answerField, puzzleAnswerField;
+    @FXML private VBox gamePane;
     @FXML private VBox leftNavPane;
+    @FXML private VBox videoWindowContainer;
+    @FXML private VBox chatWindowContainer;
     @FXML private Label lblPlayerName;
     @FXML private Label lblPlayerID;
     @FXML private Label lblRoomName;
     @FXML private Label lblRoomCode;
-    @FXML private BorderPane inRoomPane;
-    @FXML private ListView<RoomInfo> createdRoomsListView;
-    @FXML private ListView<RoomInfo> joinedRoomsListView;
-    @FXML private ListView<PlayerState> playerListView;
     @FXML private Button btnCloseRoom;
     @FXML private Button btnExitRoom;
-    @FXML private BorderPane canvasHostPane;
-    @FXML private TextField joinByCodeField;
     @FXML private Button joinByCodeButton;
     @FXML private Button reloadPlayerListButton;
     @FXML private Button reloadJoinedRoomsButton;
     @FXML private Button sendPuzzleButton;
     @FXML private Button sendGuessButton;
-    @FXML private ListView<Node> chatMessagesListView;
-    @FXML private TextField chatInputField;
     @FXML private Button sendChatButton;
-    @FXML private ScrollPane emojiScrollPane;
-    @FXML private FlowPane emojiFlowPane;
-    @FXML private VBox chatWindowContainer;
-    @FXML private StackPane chatIconBar;
     @FXML private Button chatToggleButton;
     @FXML private Button closeChatButton;
-    @FXML private Circle chatNotificationDot;
-    @FXML private VBox videoWindowContainer;
-    @FXML private Button closeVideoButton;
-    @FXML private FlowPane videoGridPane;
     @FXML private Button toggleSelfCameraButton;
     @FXML private Button videoToggleButton;
-    @FXML private Circle videoNotificationDot;
-    @FXML private StackPane centerStackPane;
-    @FXML private BorderPane canvasAndGuessArea;
-    @FXML private StackPane videoIconBar;
-    @FXML private StackPane micIconBar;
     @FXML private Button micToggleButton;
-    @FXML private Circle micNotificationDot;
     @FXML private Button toggleSelfMicButton;
+    @FXML private Button closeVideoButton;
+    @FXML private TextField puzzleAnswerField;
+    @FXML private TextField joinByCodeField;
+    @FXML private TextField chatInputField;
+    @FXML private BorderPane inRoomPane;
+    @FXML private BorderPane canvasHostPane;
+    @FXML private BorderPane canvasAndGuessArea;
+    @FXML private ListView<RoomInfo> createdRoomsListView;
+    @FXML private ListView<RoomInfo> joinedRoomsListView;
+    @FXML private ListView<PlayerState> playerListView;
+    @FXML private ListView<Node> chatMessagesListView;
+    @FXML private Circle chatNotificationDot;
+    @FXML private Circle videoNotificationDot;
+    @FXML private FlowPane emojiFlowPane;
+    @FXML private FlowPane videoGridPane;
+    @FXML private ScrollPane emojiScrollPane;
 
     private CanvasController activeCanvasController;
-    private Client client;
-    private String playerName;
-    private int playerID;
-    private String roomId;
-    private boolean isKeyHolder;
-    private boolean canvasToolsInitialized = false;
     private ObservableList<RoomInfo> createdRoomsList = FXCollections.observableArrayList();
     private ObservableList<RoomInfo> joinedRoomsList = FXCollections.observableArrayList();
     private ObservableList<PlayerState> playerList = FXCollections.observableArrayList();
-    private ObservableList<RoomInfo> searchResultList = FXCollections.observableArrayList();
-    private int currentRoomID = -1;
-    private boolean isOwnerOfCurrentRoom = false;
+    private Map<Integer, VideoTile> videoTiles = new HashMap<>();
+    private Map<Integer, SourceDataLine> audioPlaybackLines = new HashMap<>();
+    private Task<Void> webcamTask;
+    private Task<Void> audioSendTask;
     private List<Integer> activeRoomIDs = new ArrayList<>();
+    private static AudioFormat AUDIO_FORMAT;
+    private Webcam myWebcam;
+    private Client client;
+    private String playerName;
+    private int playerID;
+    private int currentRoomID = -1;
+    private static final int UDP_PACKET_TYPE_VIDEO = 1;
+    private static final int UDP_PACKET_TYPE_AUDIO = 2;
+    private boolean isOwnerOfCurrentRoom = false;
     private boolean emojisInitialized = false;
+    private boolean isChatWindowOpen = false;
+    private boolean isVideoWindowOpen = false;
+    private boolean isMyCameraOn = false;
+    private boolean isMyMicOn = false;
     private static final String[] EMOJIS = {
             "😀", "😂", "😍", "👍", "🤔", "😭", "🙏", "🔥", "🎉",
             "💯", "✅", "❌", "😱", "😎", "🤢", "😴", "👋"
     };
-    private boolean isChatWindowOpen = false;
-
-    private boolean isVideoWindowOpen = false;
-    private Webcam myWebcam;
-    private Task<Void> webcamTask;
-    private boolean isMyCameraOn = false;
-    private Map<Integer, VideoTile> videoTiles = new HashMap<>();
-
-    private static AudioFormat AUDIO_FORMAT;
-    private Task<Void> audioSendTask;
-    private Map<Integer, SourceDataLine> audioPlaybackLines = new HashMap<>();
-    private boolean isMyMicOn = false;
-
-    private static final int UDP_PACKET_TYPE_VIDEO = 1;
-    private static final int UDP_PACKET_TYPE_AUDIO = 2;
-
-    public ClientController() {
-        AUDIO_FORMAT = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED,
-                8000.0f, // 8kHz
-                16,      // 16 bit
-                1,       // Mono
-                2,       // 2 bytes/frame
-                8000.0f, // 8k frames/giây
-                false);  // Little-endian
-    }
-
-    public void initData(int playerID, String username, Client connectedClient) {
-        this.playerID = playerID;
-        this.playerName = username;
-        this.client = connectedClient;
-        this.client.setMessageHandler(this::handleServerMessage);
-
-        lblPlayerName.setText(username);
-        lblPlayerID.setText("ID: " + playerID);
-
-        gamePane.setVisible(true);
-        gamePane.setManaged(true);
-        leftNavPane.setVisible(true);
-        leftNavPane.setManaged(true);
-
-        loadMyRooms();
-        loadJoinedRooms();
-        loadActiveRoomIDs();
-
-        RegisterUdpPayload payload = new RegisterUdpPayload(playerID, client.getUdpPort());
-        client.sendMessage(new Packet(MessageType.REGISTER_UDP_PORT_REQUEST, payload));
-
-        client.sendDummyUdpPacket();
-    }
 
     @FXML
     private void initialize() {
@@ -187,18 +140,6 @@ public class ClientController {
     }
 
     @FXML
-    private void handleJoinByCode() {
-        String roomCode = joinByCodeField.getText().trim().toUpperCase();
-        if (roomCode.isEmpty()) {
-            showAlert("Gia nhập", "Vui lòng nhập mã phòng.");
-            return;
-        }
-        JoinByCodeRequestPayload payload = new JoinByCodeRequestPayload(playerID, playerName, roomCode);
-        client.sendMessage(new Packet(MessageType.JOIN_BY_CODE_REQUEST, payload));
-        showAlert("Đang chờ", "Đã gửi yêu cầu. Vui lòng chờ chủ phòng chấp nhận.");
-    }
-
-    @FXML
     private void handleShowCreateRoom() {
         TextInputDialog dialog = new TextInputDialog();
         dialog.setTitle("Tạo phòng mới");
@@ -217,6 +158,33 @@ public class ClientController {
             CreateRoomRequestPayload createRoomRequestPayload = new CreateRoomRequestPayload(this.playerID, roomName, roomCode);
             client.sendMessage(new Packet(MessageType.CREATE_ROOM_REQUEST, createRoomRequestPayload));
         });
+    }
+
+    @FXML
+    private void handleCloseRoom() {
+        PlayerIDAndRoomIDPayload playerIDAndRoomIDPayload = new PlayerIDAndRoomIDPayload(playerID, currentRoomID);
+        client.sendMessage(new Packet(MessageType.CLOSE_ROOM_REQUEST, playerIDAndRoomIDPayload));
+        showLobbyView();
+    }
+
+    @FXML
+    private void handleExitRoom() {
+        PlayerIDAndRoomIDPayload playerIDAndRoomIDPayload = new PlayerIDAndRoomIDPayload(playerID, currentRoomID);
+        client.sendMessage(new Packet(MessageType.EXIT_ROOM_SESSION_REQUEST, playerIDAndRoomIDPayload));
+        showLobbyView();
+        loadJoinedRooms();
+    }
+
+    @FXML
+    private void handleJoinByCode() {
+        String roomCode = joinByCodeField.getText().trim().toUpperCase();
+        if (roomCode.isEmpty()) {
+            showAlert("Gia nhập", "Vui lòng nhập mã phòng.");
+            return;
+        }
+        JoinByCodeRequestPayload payload = new JoinByCodeRequestPayload(playerID, playerName, roomCode);
+        client.sendMessage(new Packet(MessageType.JOIN_BY_CODE_REQUEST, payload));
+        showAlert("Đang chờ", "Đã gửi yêu cầu. Vui lòng chờ chủ phòng chấp nhận.");
     }
 
     @FXML
@@ -317,302 +285,46 @@ public class ClientController {
         emojiScrollPane.setManaged(!isVisible);
     }
 
-    private void showVideoWindow(boolean show) {
-        isVideoWindowOpen = show;
-
-        // Bật/Tắt cửa sổ Video (nằm ở trung tâm)
-        videoWindowContainer.setVisible(show);
-        videoWindowContainer.setManaged(show);
-
-        // Bật/Tắt cửa sổ Canvas (nằm ở trung tâm)
-        canvasAndGuessArea.setVisible(!show);
-        canvasAndGuessArea.setManaged(!show);
-
-        // Ẩn cửa sổ Chat nếu nó đang mở
-        if (show && isChatWindowOpen) {
-            showChatWindow(false);
-        }
-
-        if (show) {
-            videoNotificationDot.setVisible(false);
-            videoNotificationDot.setManaged(false);
-        }
+    public boolean isUserInRoom() {
+        return this.currentRoomID != -1;
     }
 
-    private void toggleMyCamera() {
-        if (isMyCameraOn) {
-            // --- TẮT CAMERA ---
-            isMyCameraOn = false;
-
-            toggleSelfCameraButton.setText("Đang tắt...");
-            toggleSelfCameraButton.setDisable(true);
-
-            CameraStatusUpdatePayload payload = new CameraStatusUpdatePayload(playerID, currentRoomID, false);
-            client.sendMessage(new Packet(MessageType.CAMERA_STATUS_UPDATE, payload));
-
-            Task<Void> closeTask = new Task<>() {
-                @Override
-                protected Void call() throws Exception {
-                    if (webcamTask != null) webcamTask.cancel(true);
-                    if (myWebcam != null && myWebcam.isOpen()) {
-                        myWebcam.close();
-                        System.out.println("Webcam closed.");
-                    }
-                    return null;
-                }
-            };
-            closeTask.setOnSucceeded(e -> {
-                toggleSelfCameraButton.setText("Bật Camera");
-                toggleSelfCameraButton.getStyleClass().remove("danger");
-                toggleSelfCameraButton.setDisable(false);
-
-                // --- FIX LỖI "ĐỨNG HÌNH" (Problem 1) ---
-                Platform.runLater(() -> updateVideoFeed(playerID, null, false));
-            });
-            new Thread(closeTask).start();
-
-        } else {
-            // --- BẬT CAMERA ---
-            isMyCameraOn = true;
-            toggleSelfCameraButton.setText("Đang mở...");
-            toggleSelfCameraButton.setDisable(true);
-
-            CameraStatusUpdatePayload payload = new CameraStatusUpdatePayload(playerID, currentRoomID, true);
-            client.sendMessage(new Packet(MessageType.CAMERA_STATUS_UPDATE, payload));
-
-            startWebcamTask();
-        }
+    public List<Integer> getActiveRoomIDs() {
+        return this.activeRoomIDs;
     }
 
-    private void toggleMyMic() {
-        isMyMicOn = !isMyMicOn;
-
-        // 1. Gửi lệnh TCP
-        MicStatusUpdatePayload payload = new MicStatusUpdatePayload(playerID, currentRoomID, isMyMicOn);
-        client.sendMessage(new Packet(MessageType.MIC_STATUS_UPDATE, payload));
-
-        if (isMyMicOn) {
-            // --- BẬT MIC ---
-            toggleSelfMicButton.setText("Tắt Mic");
-            toggleSelfMicButton.getStyleClass().add("danger");
-            startAudioSendTask(); // Bắt đầu luồng gửi âm thanh
-        } else {
-            // --- TẮT MIC ---
-            toggleSelfMicButton.setText("Bật Mic");
-            toggleSelfMicButton.getStyleClass().remove("danger");
-            if (audioSendTask != null) {
-                audioSendTask.cancel(true); // Dừng luồng
-                audioSendTask = null;
-            }
-        }
+    public ClientController() {
+        AUDIO_FORMAT = new AudioFormat(AudioFormat.Encoding.PCM_SIGNED,
+                8000.0f, // 8kHz
+                16,      // 16 bit
+                1,       // Mono
+                2,       // 2 bytes/frame
+                8000.0f, // 8k frames/giây
+                false);  // Little-endian
     }
 
-    private void startWebcamTask() {
-        if (webcamTask != null) webcamTask.cancel(true);
+    public void initData(int playerID, String username, Client connectedClient) {
+        this.playerID = playerID;
+        this.playerName = username;
+        this.client = connectedClient;
+        this.client.setMessageHandler(this::handleServerMessage);
 
-        webcamTask = new Task<>() {
-            @Override
-            protected Void call() throws Exception {
-                // 1. KHỞI TẠO WEBCAM (TRONG LUỒNG NỀN)
-                if (myWebcam == null) {
-                    System.out.println("Finding webcam...");
-                    myWebcam = Webcam.getDefault();
-                    if (myWebcam == null) {
-                        Platform.runLater(() -> showAlert("Lỗi Camera", "Không tìm thấy webcam."));
-                        throw new IllegalStateException("No webcam found");
-                    }
-                    myWebcam.setViewSize(WebcamResolution.QQVGA.getSize());
-                }
+        lblPlayerName.setText(username);
+        lblPlayerID.setText("ID: " + playerID);
 
-                // 2. MỞ WEBCAM
-                if (!myWebcam.isOpen()) {
-                    System.out.println("Opening webcam...");
-                    myWebcam.open();
-                }
+        gamePane.setVisible(true);
+        gamePane.setManaged(true);
+        leftNavPane.setVisible(true);
+        leftNavPane.setManaged(true);
 
-                // 3. CẬP NHẬT UI (BÁO LÀ ĐÃ MỞ)
-                Platform.runLater(() -> {
-                    toggleSelfCameraButton.setText("Tắt Camera");
-                    toggleSelfCameraButton.getStyleClass().add("danger");
-                    toggleSelfCameraButton.setDisable(false);
-                });
+        loadMyRooms();
+        loadJoinedRooms();
+        loadActiveRoomIDs();
 
-                // 4. BẮT ĐẦU VÒNG LẶP GỬI
-                while (!isCancelled()) {
-                    BufferedImage awtImage = myWebcam.getImage();
-                    if (awtImage == null) continue;
+        RegisterUdpPayload payload = new RegisterUdpPayload(playerID, client.getUdpPort());
+        client.sendMessage(new Packet(MessageType.REGISTER_UDP_PORT_REQUEST, payload));
 
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    ImageIO.write(awtImage, "JPG", baos);
-                    byte[] frameData = baos.toByteArray();
-
-                    client.sendUdpData(UDP_PACKET_TYPE_VIDEO, playerID, currentRoomID, frameData);
-
-                    Image fxImage = new Image(new ByteArrayInputStream(frameData));
-                    Platform.runLater(() -> updateVideoFeed(playerID, fxImage, true));
-
-                    Thread.sleep(100); // 10 FPS
-                }
-                return null;
-            }
-        };
-
-        webcamTask.setOnFailed(e -> {
-            Platform.runLater(() -> {
-                showAlert("Lỗi Camera", "Không thể khởi động webcam.");
-                if (isMyCameraOn) {
-                    toggleMyCamera(); // Tự động reset
-                }
-            });
-        });
-
-        new Thread(webcamTask).start();
-    }
-
-    private void startAudioSendTask() {
-        if (audioSendTask != null) audioSendTask.cancel(true);
-
-        audioSendTask = new Task<>() {
-            @Override
-            protected Void call() throws Exception {
-                TargetDataLine microphone;
-                try {
-                    microphone = AudioSystem.getTargetDataLine(AUDIO_FORMAT);
-                    DataLine.Info info = new DataLine.Info(TargetDataLine.class, AUDIO_FORMAT);
-                    microphone = (TargetDataLine) AudioSystem.getLine(info);
-                    microphone.open(AUDIO_FORMAT);
-                } catch (LineUnavailableException e) {
-                    Platform.runLater(() -> showAlert("Lỗi Mic", "Không thể mở micro."));
-                    return null;
-                }
-
-                microphone.start();
-                byte[] buffer = new byte[1024]; // Gói 1024 byte
-
-                while (!isCancelled()) {
-                    int bytesRead = microphone.read(buffer, 0, buffer.length);
-                    if (bytesRead > 0) {
-                        // Gửi âm thanh bằng UDP
-                        client.sendUdpData(UDP_PACKET_TYPE_AUDIO, playerID, currentRoomID, buffer);
-                    }
-                }
-
-                // Dọn dẹp
-                microphone.stop();
-                microphone.close();
-                return null;
-            }
-        };
-
-        audioSendTask.setOnFailed(e -> {
-            Platform.runLater(() -> {
-                if (isMyMicOn) toggleMyMic(); // Tự reset nếu lỗi
-            });
-        });
-
-        new Thread(audioSendTask).start();
-    }
-
-    private void updateVideoFeed(int feedPlayerID, Image image, boolean isCameraOn) {
-        VideoTile tile = videoTiles.get(feedPlayerID);
-
-        if (tile == null) {
-            // Lấy tên từ danh sách PlayerState
-            String name = playerList.stream()
-                    .filter(p -> p.getPlayerID() == feedPlayerID)
-                    .map(PlayerState::getUsername)
-                    .findFirst()
-                    .orElse("Player " + feedPlayerID);
-
-            tile = new VideoTile(name); // Tạo Tile mới
-            videoTiles.put(feedPlayerID, tile);
-
-            VideoTile finalTile = tile;
-            Platform.runLater(() -> videoGridPane.getChildren().add(finalTile));
-        }
-
-        // Cập nhật ảnh (hoặc tắt)
-        if (isCameraOn) {
-            tile.updateImage(image);
-        } else {
-            tile.setCameraOff(); // <-- FIX LỖI "ĐỨNG HÌNH"
-        }
-    }
-
-    private void playAudioData(int senderID, byte[] audioData) {
-        try {
-            SourceDataLine speaker = audioPlaybackLines.get(senderID);
-
-            // Nếu là người nói mới, tạo Loa mới cho họ
-            if (speaker == null) {
-                DataLine.Info info = new DataLine.Info(SourceDataLine.class, AUDIO_FORMAT);
-                speaker = (SourceDataLine) AudioSystem.getLine(info);
-                speaker.open(AUDIO_FORMAT);
-                speaker.start();
-                audioPlaybackLines.put(senderID, speaker);
-            }
-
-            // Ghi (phát) âm thanh ra loa
-            speaker.write(audioData, 0, audioData.length);
-
-            // --- LOGIC HIGHLIGHT (YÊU CẦU 3) ---
-            VideoTile tile = videoTiles.get(senderID);
-            if (tile != null) {
-                tile.setSpeaking(true); // Bật sáng
-            }
-
-        } catch (LineUnavailableException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void showChatWindow(boolean show) {
-        isChatWindowOpen = show;
-
-        chatWindowContainer.setVisible(show);
-        chatWindowContainer.setManaged(show);
-
-//        chatIconBar.setVisible(!show);
-//        chatIconBar.setManaged(!show);
-
-        if (show && isVideoWindowOpen) {
-            showVideoWindow(false);
-        }
-
-        if (show) {
-            chatNotificationDot.setVisible(false);
-            chatNotificationDot.setManaged(false);
-        }
-    }
-
-    private void sendChatMessage() {
-        String message = chatInputField.getText().trim();
-        if (message.isEmpty() || currentRoomID == -1) {
-            return;
-        }
-
-        SendChatMessageRequestPayload payload = new SendChatMessageRequestPayload(playerID, currentRoomID, message);
-
-        client.sendMessage(new Packet(MessageType.SEND_CHAT_MESSAGE_REQUEST, payload));
-        chatInputField.clear();
-    }
-
-    private void loadMyRooms() {
-        if (client == null) return;
-        PlayerIDPayload playerIDPayload = new PlayerIDPayload(this.playerID);
-        client.sendMessage(new Packet(MessageType.GET_MY_ROOMS_REQUEST, playerIDPayload));
-    }
-
-    private void loadJoinedRooms() {
-        if (client == null) return;
-        PlayerIDPayload playerIDPayload = new PlayerIDPayload(this.playerID);
-        client.sendMessage(new Packet(MessageType.GET_JOINED_ROOMS_REQUEST, playerIDPayload));
-    }
-
-    private void loadActiveRoomIDs() {
-        if (client == null) return;
-        PlayerIDPayload playerIDPayload = new PlayerIDPayload(this.playerID);
-        client.sendMessage(new Packet(MessageType.GET_ACTIVE_ROOM_IDS_REQUEST, playerIDPayload));
+        client.sendDummyUdpPacket();
     }
 
     public void handleServerMessage(Packet packet) {
@@ -802,6 +514,10 @@ public class ClientController {
                 }
                 break;
 
+            case ANSWER_WRONG_BROADCAST:
+                showAlert("Đoán sai", "Đáp án sai rồi bro ơi!");
+                break;
+
             case CHAT_MESSAGE_BROADCAST:
                 ChatMessageBroadcastPayload chatMessageBroadcastPayload = (ChatMessageBroadcastPayload) packet.getData();
                 addChatMessage(chatMessageBroadcastPayload.getSenderID(), chatMessageBroadcastPayload.getSenderName(), chatMessageBroadcastPayload.getMessageContent());
@@ -857,6 +573,24 @@ public class ClientController {
                 showAlert("Error", errorPayload.getMessage());
                 break;
         }
+    }
+
+    private void loadMyRooms() {
+        if (client == null) return;
+        PlayerIDPayload playerIDPayload = new PlayerIDPayload(this.playerID);
+        client.sendMessage(new Packet(MessageType.GET_MY_ROOMS_REQUEST, playerIDPayload));
+    }
+
+    private void loadJoinedRooms() {
+        if (client == null) return;
+        PlayerIDPayload playerIDPayload = new PlayerIDPayload(this.playerID);
+        client.sendMessage(new Packet(MessageType.GET_JOINED_ROOMS_REQUEST, playerIDPayload));
+    }
+
+    private void loadActiveRoomIDs() {
+        if (client == null) return;
+        PlayerIDPayload playerIDPayload = new PlayerIDPayload(this.playerID);
+        client.sendMessage(new Packet(MessageType.GET_ACTIVE_ROOM_IDS_REQUEST, playerIDPayload));
     }
 
     private void showLobbyView() {
@@ -956,19 +690,297 @@ public class ClientController {
         }
     }
 
+    public void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    private void showChatWindow(boolean show) {
+        isChatWindowOpen = show;
+
+        chatWindowContainer.setVisible(show);
+        chatWindowContainer.setManaged(show);
+
+//        chatIconBar.setVisible(!show);
+//        chatIconBar.setManaged(!show);
+
+        if (show && isVideoWindowOpen) {
+            showVideoWindow(false);
+        }
+
+        if (show) {
+            chatNotificationDot.setVisible(false);
+            chatNotificationDot.setManaged(false);
+        }
+    }
+
+    private void showVideoWindow(boolean show) {
+        isVideoWindowOpen = show;
+
+        // Bật/Tắt cửa sổ Video (nằm ở trung tâm)
+        videoWindowContainer.setVisible(show);
+        videoWindowContainer.setManaged(show);
+
+        // Bật/Tắt cửa sổ Canvas (nằm ở trung tâm)
+        canvasAndGuessArea.setVisible(!show);
+        canvasAndGuessArea.setManaged(!show);
+
+        // Ẩn cửa sổ Chat nếu nó đang mở
+        if (show && isChatWindowOpen) {
+            showChatWindow(false);
+        }
+
+        if (show) {
+            videoNotificationDot.setVisible(false);
+            videoNotificationDot.setManaged(false);
+        }
+    }
+
     private int findOwnerID(List<PlayerState> states) {
         for(PlayerState p : states) if(p.isOwner()) return p.getPlayerID();
         return -1;
     }
 
-    public boolean isUserInRoom() {
-        return this.currentRoomID != -1;
+    private void toggleMyCamera() {
+        if (isMyCameraOn) {
+            // --- TẮT CAMERA ---
+            isMyCameraOn = false;
+
+            toggleSelfCameraButton.setText("Đang tắt...");
+            toggleSelfCameraButton.setDisable(true);
+
+            CameraStatusUpdatePayload payload = new CameraStatusUpdatePayload(playerID, currentRoomID, false);
+            client.sendMessage(new Packet(MessageType.CAMERA_STATUS_UPDATE, payload));
+
+            Task<Void> closeTask = new Task<>() {
+                @Override
+                protected Void call() throws Exception {
+                    if (webcamTask != null) webcamTask.cancel(true);
+                    if (myWebcam != null && myWebcam.isOpen()) {
+                        myWebcam.close();
+                        System.out.println("Webcam closed.");
+                    }
+                    return null;
+                }
+            };
+            closeTask.setOnSucceeded(e -> {
+                toggleSelfCameraButton.setText("Bật Camera");
+                toggleSelfCameraButton.getStyleClass().remove("danger");
+                toggleSelfCameraButton.setDisable(false);
+
+                // --- FIX LỖI "ĐỨNG HÌNH" (Problem 1) ---
+                Platform.runLater(() -> updateVideoFeed(playerID, null, false));
+            });
+            new Thread(closeTask).start();
+
+        } else {
+            // --- BẬT CAMERA ---
+            isMyCameraOn = true;
+            toggleSelfCameraButton.setText("Đang mở...");
+            toggleSelfCameraButton.setDisable(true);
+
+            CameraStatusUpdatePayload payload = new CameraStatusUpdatePayload(playerID, currentRoomID, true);
+            client.sendMessage(new Packet(MessageType.CAMERA_STATUS_UPDATE, payload));
+
+            startWebcamTask();
+        }
     }
 
-    public void gracefulShutdown() {
-        if (client != null) {
-            client.disconnect();
+    private void toggleMyMic() {
+        isMyMicOn = !isMyMicOn;
+
+        // 1. Gửi lệnh TCP
+        MicStatusUpdatePayload payload = new MicStatusUpdatePayload(playerID, currentRoomID, isMyMicOn);
+        client.sendMessage(new Packet(MessageType.MIC_STATUS_UPDATE, payload));
+
+        if (isMyMicOn) {
+            // --- BẬT MIC ---
+            toggleSelfMicButton.setText("Tắt Mic");
+            toggleSelfMicButton.getStyleClass().add("danger");
+            startAudioSendTask(); // Bắt đầu luồng gửi âm thanh
+        } else {
+            // --- TẮT MIC ---
+            toggleSelfMicButton.setText("Bật Mic");
+            toggleSelfMicButton.getStyleClass().remove("danger");
+            if (audioSendTask != null) {
+                audioSendTask.cancel(true); // Dừng luồng
+                audioSendTask = null;
+            }
         }
+    }
+
+    private void startWebcamTask() {
+        if (webcamTask != null) webcamTask.cancel(true);
+
+        webcamTask = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                // 1. KHỞI TẠO WEBCAM (TRONG LUỒNG NỀN)
+                if (myWebcam == null) {
+                    System.out.println("Finding webcam...");
+                    myWebcam = Webcam.getDefault();
+                    if (myWebcam == null) {
+                        Platform.runLater(() -> showAlert("Lỗi Camera", "Không tìm thấy webcam."));
+                        throw new IllegalStateException("No webcam found");
+                    }
+                    myWebcam.setViewSize(WebcamResolution.QQVGA.getSize());
+                }
+
+                // 2. MỞ WEBCAM
+                if (!myWebcam.isOpen()) {
+                    System.out.println("Opening webcam...");
+                    myWebcam.open();
+                }
+
+                // 3. CẬP NHẬT UI (BÁO LÀ ĐÃ MỞ)
+                Platform.runLater(() -> {
+                    toggleSelfCameraButton.setText("Tắt Camera");
+                    toggleSelfCameraButton.getStyleClass().add("danger");
+                    toggleSelfCameraButton.setDisable(false);
+                });
+
+                // 4. BẮT ĐẦU VÒNG LẶP GỬI
+                while (!isCancelled()) {
+                    BufferedImage awtImage = myWebcam.getImage();
+                    if (awtImage == null) continue;
+
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    ImageIO.write(awtImage, "JPG", baos);
+                    byte[] frameData = baos.toByteArray();
+
+                    client.sendUdpData(UDP_PACKET_TYPE_VIDEO, playerID, currentRoomID, frameData);
+
+                    Image fxImage = new Image(new ByteArrayInputStream(frameData));
+                    Platform.runLater(() -> updateVideoFeed(playerID, fxImage, true));
+
+                    Thread.sleep(50); // 10 FPS
+                }
+                return null;
+            }
+        };
+
+        webcamTask.setOnFailed(e -> {
+            Platform.runLater(() -> {
+                showAlert("Lỗi Camera", "Không thể khởi động webcam.");
+                if (isMyCameraOn) {
+                    toggleMyCamera(); // Tự động reset
+                }
+            });
+        });
+
+        new Thread(webcamTask).start();
+    }
+
+    private void startAudioSendTask() {
+        if (audioSendTask != null) audioSendTask.cancel(true);
+
+        audioSendTask = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
+                TargetDataLine microphone;
+                try {
+                    microphone = AudioSystem.getTargetDataLine(AUDIO_FORMAT);
+                    DataLine.Info info = new DataLine.Info(TargetDataLine.class, AUDIO_FORMAT);
+                    microphone = (TargetDataLine) AudioSystem.getLine(info);
+                    microphone.open(AUDIO_FORMAT);
+                } catch (LineUnavailableException e) {
+                    Platform.runLater(() -> showAlert("Lỗi Mic", "Không thể mở micro."));
+                    return null;
+                }
+
+                microphone.start();
+                byte[] buffer = new byte[1024]; // Gói 1024 byte
+
+                while (!isCancelled()) {
+                    int bytesRead = microphone.read(buffer, 0, buffer.length);
+                    if (bytesRead > 0) {
+                        // Gửi âm thanh bằng UDP
+                        client.sendUdpData(UDP_PACKET_TYPE_AUDIO, playerID, currentRoomID, buffer);
+                    }
+                }
+
+                // Dọn dẹp
+                microphone.stop();
+                microphone.close();
+                return null;
+            }
+        };
+
+        audioSendTask.setOnFailed(e -> {
+            Platform.runLater(() -> {
+                if (isMyMicOn) toggleMyMic(); // Tự reset nếu lỗi
+            });
+        });
+
+        new Thread(audioSendTask).start();
+    }
+
+    private void updateVideoFeed(int feedPlayerID, Image image, boolean isCameraOn) {
+        VideoTile tile = videoTiles.get(feedPlayerID);
+
+        if (tile == null) {
+            // Lấy tên từ danh sách PlayerState
+            String name = playerList.stream()
+                    .filter(p -> p.getPlayerID() == feedPlayerID)
+                    .map(PlayerState::getUsername)
+                    .findFirst()
+                    .orElse("Player " + feedPlayerID);
+
+            tile = new VideoTile(name); // Tạo Tile mới
+            videoTiles.put(feedPlayerID, tile);
+
+            VideoTile finalTile = tile;
+            Platform.runLater(() -> videoGridPane.getChildren().add(finalTile));
+        }
+
+        // Cập nhật ảnh (hoặc tắt)
+        if (isCameraOn) {
+            tile.updateImage(image);
+        } else {
+            tile.setCameraOff(); // <-- FIX LỖI "ĐỨNG HÌNH"
+        }
+    }
+
+    private void playAudioData(int senderID, byte[] audioData) {
+        try {
+            SourceDataLine speaker = audioPlaybackLines.get(senderID);
+
+            // Nếu là người nói mới, tạo Loa mới cho họ
+            if (speaker == null) {
+                DataLine.Info info = new DataLine.Info(SourceDataLine.class, AUDIO_FORMAT);
+                speaker = (SourceDataLine) AudioSystem.getLine(info);
+                speaker.open(AUDIO_FORMAT);
+                speaker.start();
+                audioPlaybackLines.put(senderID, speaker);
+            }
+
+            // Ghi (phát) âm thanh ra loa
+            speaker.write(audioData, 0, audioData.length);
+
+            // --- LOGIC HIGHLIGHT (YÊU CẦU 3) ---
+            VideoTile tile = videoTiles.get(senderID);
+            if (tile != null) {
+                tile.setSpeaking(true); // Bật sáng
+            }
+
+        } catch (LineUnavailableException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void sendChatMessage() {
+        String message = chatInputField.getText().trim();
+        if (message.isEmpty() || currentRoomID == -1) {
+            return;
+        }
+
+        SendChatMessageRequestPayload payload = new SendChatMessageRequestPayload(playerID, currentRoomID, message);
+
+        client.sendMessage(new Packet(MessageType.SEND_CHAT_MESSAGE_REQUEST, payload));
+        chatInputField.clear();
     }
 
     private void addChatMessage(int senderID, String senderName, String messageContent) {
@@ -1002,25 +1014,10 @@ public class ClientController {
         chatMessagesListView.scrollTo(chatMessagesListView.getItems().size() - 1);
     }
 
-    @FXML private void handleCloseRoom() {
-        PlayerIDAndRoomIDPayload playerIDAndRoomIDPayload = new PlayerIDAndRoomIDPayload(playerID, currentRoomID);
-        client.sendMessage(new Packet(MessageType.CLOSE_ROOM_REQUEST, playerIDAndRoomIDPayload));
-        showLobbyView();
-    }
-
-    @FXML private void handleExitRoom() {
-        PlayerIDAndRoomIDPayload playerIDAndRoomIDPayload = new PlayerIDAndRoomIDPayload(playerID, currentRoomID);
-        client.sendMessage(new Packet(MessageType.EXIT_ROOM_SESSION_REQUEST, playerIDAndRoomIDPayload));
-        showLobbyView();
-        loadJoinedRooms();
-    }
-
-    public void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+    public void gracefulShutdown() {
+        if (client != null) {
+            client.disconnect();
+        }
     }
 
     private void handleIncomingJoinRequest(InComingJoinRequestPayload payload) {
@@ -1034,10 +1031,6 @@ public class ClientController {
 
         JoinRequestResponsePayload joinRequestResponsePayload = new JoinRequestResponsePayload(payload.getJoinerID(), payload.getRoomInfo(), approved, payload.getJoinerName());
         client.sendMessage(new Packet(MessageType.JOIN_REQUEST_RESPONSE, joinRequestResponsePayload));
-    }
-
-    public List<Integer> getActiveRoomIDs() {
-        return this.activeRoomIDs;
     }
 
     private class CreatedRoomCell extends ListCell<RoomInfo> {

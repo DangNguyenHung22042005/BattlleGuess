@@ -16,11 +16,11 @@ import javafx.geometry.Point2D;
 public class DrawingPane extends Canvas {
     private ArrayList<Line> lines;
     private ArrayList<FillRegion> fillRegions;
-    private Color currentColor = Color.BLACK;
     private double currentStrokeSize = 1.0;
-    private CanvasToolType currentTool = CanvasToolType.PENCIL;
     private double eraserSize = 5.0;
     private boolean isDrawingEnabled = true;
+    private CanvasToolType currentTool = CanvasToolType.PENCIL;
+    private Color currentColor = Color.BLACK;
 
     public DrawingPane() {
         super(650, 400);
@@ -29,6 +29,30 @@ public class DrawingPane extends Canvas {
         lines = new ArrayList<>();
         fillRegions = new ArrayList<>();
         setupMouseListeners();
+    }
+
+    public void setCurrentColor(Color color) {
+        this.currentColor = color;
+    }
+
+    public void setCurrentStrokeSize(double size) {
+        this.currentStrokeSize = size;
+    }
+
+    public void setCurrentTool(CanvasToolType tool) {
+        this.currentTool = tool;
+    }
+
+    public void setEraserSize(double size) {
+        this.eraserSize = size;
+    }
+
+    public void setDrawingEnabled(boolean enabled) {
+        this.isDrawingEnabled = enabled;
+    }
+
+    public boolean isCanvasBlank() {
+        return lines.isEmpty() && fillRegions.isEmpty();
     }
 
     private void setupMouseListeners() {
@@ -227,7 +251,6 @@ public class DrawingPane extends Canvas {
 
     public void clearDrawing() {
         if (!isDrawingEnabled) return;
-
         forceClearCanvas();
     }
 
@@ -236,34 +259,6 @@ public class DrawingPane extends Canvas {
         fillRegions.clear();
         getGraphicsContext2D().setFill(Color.WHITE);
         getGraphicsContext2D().fillRect(0, 0, getWidth(), getHeight());
-    }
-
-    public CanvasToolType getCurrentTool() {
-        return this.currentTool;
-    }
-
-    public void setCurrentColor(Color color) {
-        this.currentColor = color;
-    }
-
-    public void setCurrentStrokeSize(double size) {
-        this.currentStrokeSize = size;
-    }
-
-    public void setCurrentTool(CanvasToolType tool) {
-        this.currentTool = tool;
-    }
-
-    public void setEraserSize(double size) {
-        this.eraserSize = size;
-    }
-
-    public void setDrawingEnabled(boolean enabled) {
-        this.isDrawingEnabled = enabled;
-    }
-
-    public boolean isCanvasBlank() {
-        return lines.isEmpty() && fillRegions.isEmpty();
     }
 
     public void loadPuzzleImage(byte[] imageData) {

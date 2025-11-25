@@ -296,7 +296,7 @@ public class Server implements Runnable {
 
                     case SEND_GUESS_REQUEST:
                         SendGuessRequestPayload guessPayload = (SendGuessRequestPayload) packet.getData();
-                        handleSendGuess(guessPayload);
+                        handleSendGuess(guessPayload, out);
                         break;
 
                     case SEND_CHAT_MESSAGE_REQUEST:
@@ -388,7 +388,7 @@ public class Server implements Runnable {
         session.broadcastToGuessers(packet);
     }
 
-    private void handleSendGuess(SendGuessRequestPayload payload) throws IOException, SQLException {
+    private void handleSendGuess(SendGuessRequestPayload payload, ObjectOutputStream out) throws IOException, SQLException {
         RoomSession session = activeRooms.get(payload.getRoomID());
         if (session == null || payload.getPlayerID() == session.getOwnerPlayerID()) {
             return; // Phòng không tồn tại hoặc chủ phòng không được đoán
@@ -423,9 +423,9 @@ public class Server implements Runnable {
                     session.getPlayerStates()
             );
             session.broadcast(new Packet(MessageType.ROOM_STATE_UPDATE, updatePayload));
+        } else {
+            out.writeObject(new Packet(MessageType.ANSWER_WRONG_BROADCAST, new GenericResponsePayload("Đáp án sai rồi bro ơi!!!")));
         }
-
-        // (Nếu đoán sai: Không làm gì cả)
     }
 
     private void handleSendChat(SendChatMessageRequestPayload payload) throws IOException {
