@@ -1,8 +1,12 @@
 package com.battleguess.battleguess.database;
 
 import java.sql.*;
+
+import com.battleguess.battleguess.model.AdminRoomRow;
 import com.battleguess.battleguess.model.PlayerState;
 import com.battleguess.battleguess.model.RoomInfo;
+import com.battleguess.battleguess.service.ServerLogger;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,6 +24,7 @@ public class DatabaseManager {
     private void connect() throws SQLException {
         connection = DriverManager.getConnection(URL, USER, PASSWORD);
         System.out.println("✅ Connected to SQL Server successfully!");
+        ServerLogger.success("✅ Connected to SQL Server successfully!");
     }
 
     public Connection getConnection() {
@@ -96,6 +101,23 @@ public class DatabaseManager {
                 }
                 return -1; // Sai tên đăng nhập hoặc mật khẩu
             }
+        }
+    }
+
+    /**
+     * Cập nhật mật khẩu mới cho người dùng.
+     * @param username Tên đăng nhập
+     * @param newHashedPassword Mật khẩu mới (đã hash)
+     * @return true nếu cập nhật thành công (user tồn tại), false nếu không.
+     */
+    public boolean updatePassword(String username, String newHashedPassword) throws SQLException {
+        String sql = "UPDATE Players SET Password = ? WHERE Username = ?";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setString(1, newHashedPassword);
+            ps.setString(2, username);
+
+            int rowsAffected = ps.executeUpdate();
+            return rowsAffected > 0; // Trả về true nếu có dòng được cập nhật
         }
     }
 
@@ -477,5 +499,156 @@ public class DatabaseManager {
         }
 
         return newScore;
+    }
+
+    /**
+     * Lấy danh sách tất cả người chơi (cho Admin).
+     */
+    public List<PlayerState> getAllPlayers() throws SQLException {
+        List<PlayerState> players = new ArrayList<>();
+        String sql = "SELECT PlayerID, Username, TotalScore FROM Players";
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                // Mặc định offline và not owner, AdminController sẽ cập nhật lại sau
+                players.add(new PlayerState(
+                        rs.getInt("PlayerID"),
+                        rs.getString("Username"),
+                        rs.getInt("TotalScore"),
+                        false,
+                        false
+                ));
+            }
+        }
+        return players;
+    }
+
+    /**
+     * Xóa người chơi và toàn bộ dữ liệu liên quan (Cascade).
+     * 1. Xóa thành viên trong các phòng do người này tạo.
+     * 2. Xóa các phòng do người này tạo.
+     * 3. Xóa người này khỏi các phòng họ đang tham gia.
+     * 4. Xóa tài khoản người này.
+     */
+    public boolean deletePlayerFully(int playerID) throws SQLException {
+        connection.setAutoCommit(false); // Bắt đầu Transaction
+        try {
+            // 1. Xóa membership của TẤT CẢ các phòng do người này sở hữu
+            // (Vì khi xóa phòng, membership của người khác trong phòng đó cũng phải bay màu)
+            String sqlDeleteMembersOfOwnedRooms =
+                    "DELETE FROM RoomMemberships WHERE RoomID IN (SELECT RoomID FROM Rooms WHERE OwnerPlayerID = ?)";
+            try (PreparedStatement ps = connection.prepareStatement(sqlDeleteMembersOfOwnedRooms)) {
+                ps.setInt(1, playerID);
+                ps.executeUpdate();
+            }
+
+            // 2. Xóa các phòng do người này sở hữu
+            String sqlDeleteOwnedRooms = "DELETE FROM Rooms WHERE OwnerPlayerID = ?";
+            try (PreparedStatement ps = connection.prepareStatement(sqlDeleteOwnedRooms)) {
+                ps.setInt(1, playerID);
+                ps.executeUpdate();
+            }
+
+            // 3. Xóa membership của chính người này (ở các phòng khác)
+            String sqlDeleteSelfMembership = "DELETE FROM RoomMemberships WHERE PlayerID = ?";
+            try (PreparedStatement ps = connection.prepareStatement(sqlDeleteSelfMembership)) {
+                ps.setInt(1, playerID);
+                ps.executeUpdate();
+            }
+
+            // 4. Cuối cùng: Xóa tài khoản
+            String sqlDeletePlayer = "DELETE FROM Players WHERE PlayerID = ?";
+            try (PreparedStatement ps = connection.prepareStatement(sqlDeletePlayer)) {
+                ps.setInt(1, playerID);
+                int rows = ps.executeUpdate();
+
+                connection.commit(); // Thành công thì lưu
+                return rows > 0;
+            }
+        } catch (SQLException e) {
+            connection.rollback(); // Lỗi thì quay lại
+            e.printStackTrace();
+            return false;
+        } finally {
+            connection.setAutoCommit(true);
+        }
+    }
+
+    /**
+     * Lấy danh sách ID các phòng do người chơi này sở hữu.
+     * (Dùng để Server đóng active room trước khi xóa).
+     */
+    public List<Integer> getRoomIDsOwnedBy(int playerID) throws SQLException {
+        List<Integer> roomIDs = new ArrayList<>();
+        String sql = "SELECT RoomID FROM Rooms WHERE OwnerPlayerID = ?";
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+            ps.setInt(1, playerID);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    roomIDs.add(rs.getInt("RoomID"));
+                }
+            }
+        }
+        return roomIDs;
+    }
+
+    /**
+     * Lấy danh sách tất cả phòng chơi cho Admin.
+     * Kèm theo Tên chủ phòng và Số lượng thành viên.
+     */
+    public List<AdminRoomRow> getAllRoomsForAdmin() throws SQLException {
+        List<AdminRoomRow> rooms = new ArrayList<>();
+        // Query kết hợp (JOIN) để lấy tên chủ phòng và đếm số thành viên
+        String sql = "SELECT r.RoomID, r.RoomName, r.RoomCode, p.Username as OwnerName, " +
+                "(SELECT COUNT(*) FROM RoomMemberships WHERE RoomID = r.RoomID) as MemberCount " +
+                "FROM Rooms r " +
+                "JOIN Players p ON r.OwnerPlayerID = p.PlayerID";
+
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                // Status sẽ được Server cập nhật sau (Open/Closed)
+                rooms.add(new AdminRoomRow(
+                        rs.getInt("RoomID"),
+                        rs.getString("RoomName"),
+                        rs.getString("OwnerName"),
+                        "Closed", // Mặc định
+                        rs.getInt("MemberCount"),
+                        rs.getString("RoomCode")
+                ));
+            }
+        }
+        return rooms;
+    }
+
+    /**
+     * Xóa phòng và toàn bộ membership (Cascade).
+     */
+    public boolean deleteRoomFully(int roomID) throws SQLException {
+        connection.setAutoCommit(false);
+        try {
+            // 1. Xóa Membership trước
+            String sqlDeleteMembers = "DELETE FROM RoomMemberships WHERE RoomID = ?";
+            try (PreparedStatement ps = connection.prepareStatement(sqlDeleteMembers)) {
+                ps.setInt(1, roomID);
+                ps.executeUpdate();
+            }
+
+            // 2. Xóa Phòng
+            String sqlDeleteRoom = "DELETE FROM Rooms WHERE RoomID = ?";
+            try (PreparedStatement ps = connection.prepareStatement(sqlDeleteRoom)) {
+                ps.setInt(1, roomID);
+                int rows = ps.executeUpdate();
+
+                connection.commit();
+                return rows > 0;
+            }
+        } catch (SQLException e) {
+            connection.rollback();
+            e.printStackTrace();
+            return false;
+        } finally {
+            connection.setAutoCommit(true);
+        }
     }
 }

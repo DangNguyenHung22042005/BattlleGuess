@@ -27,6 +27,8 @@
             <Button text="Đăng ký" onAction="#onRegisterClicked" style="-fx-background-color: transparent; -fx-text-fill: white; -fx-underline: true;"/>
         </HBox>
 
+        <Hyperlink text="Quên mật khẩu?" onAction="#onForgotPasswordClicked" style="-fx-text-fill: #bdc3c7; -fx-underline: true;"/>
+
         <Label fx:id="lblStatus" text="" style="-fx-text-fill: #ffdddd; -fx-font-size: 12;"/>
     </VBox>
 </StackPane>

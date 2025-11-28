@@ -4,8 +4,14 @@ import com.battleguess.battleguess.Server;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.stage.Stage;
 import javafx.util.Callback;
 import java.io.IOException;
 
@@ -34,6 +40,9 @@ public class ServerController {
                         } else {
                             HBox hbox = new HBox(10);
                             Label portLabel = new Label("Port: " + server.getPort());
+                            Region spacer = new Region();
+                            HBox.setHgrow(spacer, Priority.ALWAYS);
+
                             Button toggleButton = new Button(server.isRunning() ? "Stop" : "Start");
                             toggleButton.getStyleClass().add("button");
                             if (server.isRunning()) {
@@ -50,7 +59,15 @@ public class ServerController {
                                     toggleButton.getStyleClass().add("active-tool");
                                 }
                             });
-                            hbox.getChildren().addAll(portLabel, toggleButton);
+
+                            Button manageButton = new Button("Quản lý");
+                            manageButton.setStyle("-fx-background-color: #3498db; -fx-text-fill: white;");
+                            // Chỉ cho phép quản lý khi server đang chạy
+                            manageButton.disableProperty().bind(toggleButton.textProperty().isEqualTo("Start"));
+
+                            manageButton.setOnAction(event -> openAdminDashboard(server));
+
+                            hbox.getChildren().addAll(portLabel, spacer, manageButton, toggleButton);
                             setGraphic(hbox);
                         }
                     }
@@ -84,5 +101,24 @@ public class ServerController {
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
+    }
+
+    private void openAdminDashboard(Server server) {
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/battleguess/battleguess/view/admin-dashboard.fxml"));
+            Parent root = loader.load();
+
+            // Truyền instance Server đang chạy sang Admin Controller
+            AdminDashboardController adminController = loader.getController();
+            adminController.setServerInstance(server);
+
+            Stage stage = new Stage();
+            stage.setTitle("Admin Dashboard - Port " + server.getPort());
+            stage.setScene(new Scene(root));
+            stage.show();
+        } catch (IOException e) {
+            e.printStackTrace();
+            showAlert("Lỗi", "Không thể mở giao diện quản trị.");
+        }
     }
 }

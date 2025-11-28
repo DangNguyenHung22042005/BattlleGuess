@@ -9,6 +9,8 @@ import com.battleguess.battleguess.model.RoomSession;
 import com.battleguess.battleguess.network.request.*;
 import com.battleguess.battleguess.network.response.*;
 import com.battleguess.battleguess.network.Packet;
+import com.battleguess.battleguess.service.ServerLogger;
+
 import java.io.EOFException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -48,6 +50,7 @@ public class Server implements Runnable {
             this.db = new DatabaseManager();
         } catch (SQLException e) {
             e.printStackTrace();
+            ServerLogger.error("Failed to connect to Database.");
             throw new IOException("Failed to connect to Database.");
         }
         createServerSocket();
@@ -57,7 +60,9 @@ public class Server implements Runnable {
         try {
             serverSocket = new ServerSocket(port);
             System.out.println("Server created on port " + port);
+            ServerLogger.info("Server created on port " + port);
         } catch (IOException e) {
+            ServerLogger.error("Port " + port + " is already in use or invalid.");
             throw new IOException("Port " + port + " is already in use or invalid.");
         }
     }
@@ -72,18 +77,22 @@ public class Server implements Runnable {
                 thread = new Thread(this);
                 thread.start();
                 System.out.println("Server started on port " + port);
+                ServerLogger.info("Server started on port " + port);
 
-                // 2. KHỞI ĐỘNG UDP (DI CHUYỂN VÀO ĐÂY)
+                // 2. KHỞI ĐỘNG UDP
                 try {
                     this.udpSocket = new DatagramSocket(UDP_PORT);
                     System.out.println("UDP Reflector started on port " + UDP_PORT);
-                    startUdpReflector(); // <-- GỌI Ở ĐÂY (khi running = true)
+                    ServerLogger.info("UDP Reflector started on port " + UDP_PORT);
+                    startUdpReflector();
                 } catch (Exception e) {
                     running = false; // Tắt lại nếu UDP lỗi
+                    ServerLogger.error("Failed to start UDP socket: " + e.getMessage());
                     throw new RuntimeException("Failed to start UDP socket: " + e.getMessage());
                 }
             } catch (IOException e) {
                 running = false;
+                ServerLogger.error("Failed to start server on port " + port + ": " + e.getMessage());
                 throw new RuntimeException("Failed to start server on port " + port + ": " + e.getMessage());
             }
         }
@@ -103,6 +112,7 @@ public class Server implements Runnable {
                     udpSocket.close(); // Gây ra IOException để luồng UDP thoát
                 }
                 System.out.println("Server stopped on port " + port);
+                ServerLogger.warn("Server stopped on port " + port);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -123,7 +133,8 @@ public class Server implements Runnable {
             try {
                 Socket clientSocket = serverSocket.accept();
                 if (clientSocket != null) {
-                    System.out.println("Client connected on port " + port);
+                    System.out.println("New client connected on port " + port);
+                    ServerLogger.info("New client connected on port " + port);
                     new Thread(() -> handleClient(clientSocket)).start();
                 }
             } catch (IOException e) {
@@ -168,10 +179,6 @@ public class Server implements Runnable {
                     broadcastBuffer.put(payloadData);   // Gói lại Data (Audio/Video)
                     byte[] broadcastData = broadcastBuffer.array();
 
-                    // Gửi (Reflect)
-                    System.out.println("[UDP REFLECT] Room " + roomID + " Type " + packetType + " from " + senderID +
-                            ". Targets: " + session.getUdpAddresses());
-
                     for (Map.Entry<Integer, SocketAddress> entry : session.getUdpAddresses().entrySet()) {
                         if (entry.getKey() != senderID) {
                             DatagramPacket sendPacket = new DatagramPacket(
@@ -212,12 +219,18 @@ public class Server implements Runnable {
                         if (pID != -1) {
                             currentPlayerID = pID;
                             clientToPlayerID.put(out, currentPlayerID);
+                            ServerLogger.info("User logged in: " + loginPayload.getUsername() + " (ID: " + currentPlayerID + ")");
                         }
                         break;
 
                     case REGISTER_REQUEST:
                         LoginRequestPayload regPayload = (LoginRequestPayload) packet.getData();
                         handleRegisterRequest(regPayload, out);
+                        break;
+
+                    case RESET_PASSWORD_REQUEST:
+                        ResetPasswordRequestPayload resetPayload = (ResetPasswordRequestPayload) packet.getData();
+                        handleResetPassword(resetPayload, out);
                         break;
 
                     case GET_MY_ROOMS_REQUEST:
@@ -323,6 +336,7 @@ public class Server implements Runnable {
             }
         } catch (EOFException e) {
             System.out.println("Client disconnected.");
+            ServerLogger.info("Client disconnected.");
             // --- LOGIC DETECT OFFLINE QUAN TRỌNG ---
             handleClientDisconnect(out, currentPlayerID);
         } catch (IOException | ClassNotFoundException | SQLException e) {
@@ -343,6 +357,7 @@ public class Server implements Runnable {
 
         playerUdpAddressStore.put(payload.getPlayerID(), udpAddress);
         System.out.println("UDP Registered for Player " + payload.getPlayerID() + " at " + udpAddress);
+        ServerLogger.info("UDP Registered for Player " + payload.getPlayerID() + " at " + udpAddress);
 
         udpAddrToPlayerID.put(udpAddress, payload.getPlayerID());
 
@@ -459,7 +474,9 @@ public class Server implements Runnable {
         try {
             int playerID = db.validatePlayer(payload.getUsername(), payload.getPassword());
             if (playerID != -1) {
-                out.writeObject(new Packet(MessageType.LOGIN_SUCCESS, new LoginSuccessPayload(playerID, payload.getUsername())));
+                int score = db.getPlayerScore(playerID);
+
+                out.writeObject(new Packet(MessageType.LOGIN_SUCCESS, new LoginSuccessPayload(playerID, payload.getUsername(), score)));
                 return playerID;
             } else {
                 out.writeObject(new Packet(MessageType.LOGIN_FAILED, new GenericResponsePayload("Tên đăng nhập hoặc mật khẩu không đúng.")));
@@ -493,6 +510,32 @@ public class Server implements Runnable {
         }
     }
 
+    private void handleResetPassword(ResetPasswordRequestPayload payload, ObjectOutputStream out) throws IOException {
+        try {
+            if (!db.playerExists(payload.getUsername())) {
+                out.writeObject(new Packet(MessageType.RESET_PASSWORD_FAILED,
+                        new GenericResponsePayload("Tên người dùng không tồn tại.")));
+                return;
+            }
+
+            String hashedPassword = PasswordUtils.hashPassword(payload.getNewPassword());
+
+            boolean success = db.updatePassword(payload.getUsername(), hashedPassword);
+
+            if (success) {
+                out.writeObject(new Packet(MessageType.RESET_PASSWORD_SUCCESS,
+                        new GenericResponsePayload("Đặt lại mật khẩu thành công!")));
+            } else {
+                out.writeObject(new Packet(MessageType.RESET_PASSWORD_FAILED,
+                        new GenericResponsePayload("Lỗi hệ thống, không thể cập nhật.")));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            out.writeObject(new Packet(MessageType.RESET_PASSWORD_FAILED,
+                    new GenericResponsePayload("Lỗi CSDL.")));
+        }
+    }
+
     private void handleGetMyRooms(PlayerIDPayload payload, ObjectOutputStream out) throws IOException {
         try {
             List<RoomInfo> myRooms = db.getRoomsByOwner(payload.getPlayerID());
@@ -514,6 +557,7 @@ public class Server implements Runnable {
 
                 CreateRoomSuccessPayload createRoomSuccessPayload = new CreateRoomSuccessPayload(newRoomInfo);
                 out.writeObject(new Packet(MessageType.CREATE_ROOM_SUCCESS, createRoomSuccessPayload));
+                ServerLogger.info("Room created: " + payload.getRoomName() + " (ID: " + newRoomID + " - CODE: " + payload.getRoomCode() + ")");
             } else {
                 out.writeObject(new Packet(MessageType.CREATE_ROOM_FAILED, new GenericResponsePayload("Tạo phòng thất bại (ID = -1).")));
             }
@@ -544,6 +588,7 @@ public class Server implements Runnable {
             if (success) {
                 PlayerIDAndRoomIDPayload playerIDAndRoomIDPayload = new PlayerIDAndRoomIDPayload(payload.getPlayerID(), payload.getRoomID());
                 out.writeObject(new Packet(MessageType.DELETE_ROOM_SUCCESS, playerIDAndRoomIDPayload));
+                ServerLogger.warn("Room deleted: ID: " + payload.getRoomID());
             } else {
                 out.writeObject(new Packet(MessageType.DELETE_ROOM_FAILED, new GenericResponsePayload("Xóa phòng thất bại (Không phải chủ phòng).")));
             }
@@ -602,6 +647,7 @@ public class Server implements Runnable {
             session.registerUdpAddress(ownerPlayerID, udpAddr);
         } else {
             System.err.println("WARN: Owner " + ownerPlayerID + " opened room but has no UDP address registered.");
+            ServerLogger.warn("WARN: Owner " + ownerPlayerID + " opened room but has no UDP address registered.");
         }
 
         activeRooms.put(roomID, session);
@@ -611,6 +657,8 @@ public class Server implements Runnable {
 
         RoomStateUpdatePayload roomStateUpdatePayload = new RoomStateUpdatePayload(roomInfo, currentStates);
         out.writeObject(new Packet(MessageType.ROOM_OPEN_SUCCESS, roomStateUpdatePayload));
+
+        ServerLogger.info("Room created: " + roomInfo.getRoomName() + " (ID: " + roomID + " - CODE: " + roomInfo.getRoomCode() + ")");
 
         broadcastToAllClients(new Packet(MessageType.ROOM_NOW_ACTIVE, new RoomIDPayload(roomID)));
     }
@@ -633,6 +681,7 @@ public class Server implements Runnable {
             session.registerUdpAddress(playerID, udpAddr);
         } else {
             System.err.println("WARN: Player " + playerID + " joined room but has no UDP address registered.");
+            ServerLogger.warn("WARN: Player " + playerID + " joined room but has no UDP address registered.");
         }
 
         List<PlayerState> currentStates = session.getPlayerStates();
@@ -694,6 +743,8 @@ public class Server implements Runnable {
             for(Integer pID : session.getPlayerStates().stream().map(PlayerState::getPlayerID).toList()) {
                 playerIDToRoomID.remove(pID);
             }
+
+            ServerLogger.warn("Room closed: ID: " + roomID);
 
             broadcastToAllClients(new Packet(MessageType.ROOM_NOW_INACTIVE, new RoomIDPayload(roomID)));
         }
@@ -782,6 +833,7 @@ public class Server implements Runnable {
                 session.registerUdpAddress(targetPlayerID, udpAddr);
             } else {
                 System.err.println("WARN: Player " + targetPlayerID + " was approved but has no UDP address registered.");
+                ServerLogger.warn("WARN: Player " + targetPlayerID + " was approved but has no UDP address registered.");
             }
 
             List<PlayerState> currentStates = session.getPlayerStates();
@@ -835,5 +887,163 @@ public class Server implements Runnable {
         // 5. Gửi yêu cầu cho chủ phòng (Tái sử dụng MessageType)
         InComingJoinRequestPayload inComingJoinPayload = new InComingJoinRequestPayload(joinerID, joinerName, targetSession.getRoomInfo());
         ownerStream.writeObject(new Packet(MessageType.INCOMING_JOIN_REQUEST, inComingJoinPayload));
+    }
+
+    // --- ADMIN DASHBOARD ---
+    public boolean isPlayerOnline(int playerID) {
+        return playerIDToRoomID.containsKey(playerID) || // Đang trong phòng
+                clientToPlayerID.containsValue(playerID); // Đang ở sảnh (đã login)
+    }
+
+    public int getPlayerCurrentRoom(int playerID) {
+        return playerIDToRoomID.getOrDefault(playerID, -1);
+    }
+
+    public DatabaseManager getDatabaseManager() {
+        return this.db;
+    }
+
+    public boolean performAdminDelete(int playerID) {
+        try {
+            // BƯỚC 1: Lấy danh sách phòng người này sở hữu (để đóng nếu đang Active)
+            List<Integer> ownedRoomIDs = db.getRoomIDsOwnedBy(playerID);
+
+            // BƯỚC 2: Xóa trong Database (Cascade)
+            boolean success = db.deletePlayerFully(playerID);
+
+            if (success) {
+                // BƯỚC 3: Xử lý trên Bộ nhớ (RAM)
+
+                // 3a. Nếu người này đang là Chủ phòng của 1 phòng active -> Đóng phòng đó
+                for (int rID : ownedRoomIDs) {
+                    if (activeRooms.containsKey(rID)) {
+                        // Tái sử dụng hàm đóng phòng (nó sẽ báo cho mọi người trong phòng biết)
+                        handleCloseRoom(rID, playerID);
+                    }
+                }
+
+                // 3b. Nếu người này đang là Khách trong các phòng active khác -> Đá ra
+                for (RoomSession session : activeRooms.values()) {
+                    if (session.hasPlayer(playerID)) {
+                        // Tái sử dụng logic kick (xóa khỏi RAM và báo update)
+                        session.playerKick(playerID);
+                        playerIDToRoomID.remove(playerID);
+
+                        // Gửi update cho những người còn lại trong phòng đó (để mất dòng tên người bị xóa)
+                        RoomStateUpdatePayload updatePayload = new RoomStateUpdatePayload(session.getRoomInfo(), session.getPlayerStates());
+                        session.broadcast(new Packet(MessageType.ROOM_STATE_UPDATE, updatePayload));
+                    }
+                }
+
+                // 3c. Xóa thông tin kết nối/UDP
+                // Tìm stream của người bị xóa (nếu họ đang treo máy mà bị xóa)
+                ObjectOutputStream outToRemove = null;
+                for (Map.Entry<ObjectOutputStream, Integer> entry : clientToPlayerID.entrySet()) {
+                    if (entry.getValue() == playerID) {
+                        outToRemove = entry.getKey();
+                        break;
+                    }
+                }
+                if (outToRemove != null) clientToPlayerID.remove(outToRemove);
+                playerUdpAddressStore.remove(playerID);
+
+                // BƯỚC 4: Broadcast toàn server để refresh danh sách phòng (Fix lỗi sảnh)
+                broadcastToAllClients(new Packet(MessageType.FORCE_REFRESH_DATA, new GenericResponsePayload("Data Updated")));
+                ServerLogger.info("Player " + playerID + " account deleted!");
+
+                return true;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    public boolean isRoomActive(int roomID) {
+        return activeRooms.containsKey(roomID);
+    }
+
+    public boolean performAdminDeleteRoom(int roomID) {
+        // BƯỚC 1: Xử lý trên RAM (Nếu phòng đang mở)
+        RoomSession session = activeRooms.get(roomID);
+        if (session != null) {
+            // Gửi thông báo cho những người đang trong phòng
+            session.broadcast(new Packet(MessageType.ROOM_CLOSED_BY_OWNER,
+                    new GenericResponsePayload("Phòng đã bị giải tán bởi Admin.")));
+
+            // Xóa session khỏi bộ nhớ
+            activeRooms.remove(roomID);
+
+            // Dọn dẹp map phụ (playerID -> roomID)
+            // (Cách này hơi tốn kém tí nhưng an toàn: duyệt map để xóa)
+            playerIDToRoomID.entrySet().removeIf(entry -> entry.getValue() == roomID);
+
+            // Báo cho sảnh biết phòng đã đóng (để mất viền xanh)
+            broadcastToAllClients(new Packet(MessageType.ROOM_NOW_INACTIVE, new RoomIDPayload(roomID)));
+        }
+
+        // BƯỚC 2: Xóa trong Database
+        try {
+            boolean success = db.deleteRoomFully(roomID);
+
+            if (success) {
+                // BƯỚC 3: Báo toàn bộ Client tải lại danh sách phòng (Fix danh sách đã tạo/đã tham gia)
+                broadcastToAllClients(new Packet(MessageType.FORCE_REFRESH_DATA,
+                        new GenericResponsePayload("Room Deleted")));
+                ServerLogger.info("Room " + roomID + " deleted!");
+                return true;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    public boolean performAdminKick(int roomID, int targetPlayerID) {
+        try {
+            // 1. Xóa khỏi CSDL (Membership)
+            boolean success = db.removePlayerFromRoom(targetPlayerID, roomID);
+
+            if (!success) {
+                return false; // Không tồn tại trong DB
+            }
+
+            // 2. Xử lý trên Session (nếu phòng đang mở)
+            RoomSession session = activeRooms.get(roomID);
+            if (session != null) {
+                // a. Gửi thông báo cho người bị kick (nếu họ đang online)
+                ObjectOutputStream targetStream = session.getStream(targetPlayerID);
+                if (targetStream != null) {
+                    try {
+                        targetStream.writeObject(new Packet(MessageType.YOU_WERE_KICKED,
+                                new GenericResponsePayload("Bạn đã bị Admin kick khỏi phòng.")));
+                    } catch (IOException e) { e.printStackTrace(); }
+                }
+
+                // b. Xóa khỏi Session (Presence)
+                session.playerKick(targetPlayerID);
+                playerIDToRoomID.remove(targetPlayerID);
+
+                // c. Thông báo cập nhật danh sách cho những người còn lại (Realtime)
+                RoomStateUpdatePayload updatePayload = new RoomStateUpdatePayload(session.getRoomInfo(), session.getPlayerStates());
+                session.broadcast(new Packet(MessageType.ROOM_STATE_UPDATE, updatePayload));
+            }
+
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean sendSystemMessage(int roomID, String message) {
+        RoomSession session = activeRooms.get(roomID);
+        if (session != null) {
+            AdminChatBroadcastPayload payload = new AdminChatBroadcastPayload(message);
+            session.broadcast(new Packet(MessageType.ADMIN_CHAT_BROADCAST, payload));
+            ServerLogger.success("Send message to room " + roomID + " successfully!");
+            return true;
+        }
+        return false;
     }
 }

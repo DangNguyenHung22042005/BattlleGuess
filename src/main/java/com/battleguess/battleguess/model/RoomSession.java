@@ -156,4 +156,8 @@ public class RoomSession {
             playersWithMicOn.remove(playerID);
         }
     }
+
+    public boolean hasPlayer(int playerID) {
+        return players.containsKey(playerID);
+    }
 }

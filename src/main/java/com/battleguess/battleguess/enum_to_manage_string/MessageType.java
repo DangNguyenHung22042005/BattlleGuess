@@ -4,12 +4,15 @@ public enum MessageType {
     // Yêu cầu từ Client (Login/Register)
     LOGIN_REQUEST,
     REGISTER_REQUEST,
+    RESET_PASSWORD_REQUEST,
 
     // Phản hồi từ Server
     LOGIN_SUCCESS,
     LOGIN_FAILED,
     REGISTER_SUCCESS,
     REGISTER_FAILED,
+    RESET_PASSWORD_SUCCESS,
+    RESET_PASSWORD_FAILED,
 
     // Yêu cầu từ Client (Quản lý phòng)
     CREATE_ROOM_REQUEST,
@@ -78,6 +81,10 @@ public enum MessageType {
     MIC_STATUS_UPDATE,          // (Client -> Server) Báo tôi Bật/Tắt mic
     PLAYER_MIC_STATUS_UPDATE,   // (Server -> All) Báo Player A Bật/Tắt mic (cho UI)
     AUDIO_FRAME_BROADCAST,      // (UDP Receiver -> ClientController) Gói tin "nội bộ"
+
+    // --- LỆNH HỆ THỐNG ---
+    FORCE_REFRESH_DATA, // (Server -> All Clients) Yêu cầu tải lại danh sách phòng/tham gia
+    ADMIN_CHAT_BROADCAST,         // (Server -> All Clients in Room) Tin nhắn từ Admin
 
     ERROR;
 }

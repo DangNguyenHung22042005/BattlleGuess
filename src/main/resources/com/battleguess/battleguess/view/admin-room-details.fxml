@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.layout.VBox?>
+<?import java.net.URL?>
+
+<VBox spacing="10" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.battleguess.battleguess.controller.AdminRoomDetailsController"
+      prefWidth="500" prefHeight="400" style="-fx-padding: 20;">
+
+    <stylesheets>
+        <URL value="@../css/modern.css"/>
+    </stylesheets>
+
+    <Label fx:id="lblRoomName" text="Chi tiết phòng: ..." styleClass="title-label" style="-fx-text-fill: #333;"/>
+
+    <TableView fx:id="memberTable" VBox.vgrow="ALWAYS">
+        <columns>
+            <TableColumn fx:id="colID" text="ID" prefWidth="50"/>
+            <TableColumn fx:id="colName" text="Tên thành viên" prefWidth="150"/>
+            <TableColumn fx:id="colRole" text="Vai trò" prefWidth="80"/>
+            <TableColumn fx:id="colStatus" text="Trạng thái" prefWidth="80"/>
+            <TableColumn fx:id="colAction" text="Hành động" prefWidth="100"/>
+        </columns>
+        <columnResizePolicy>
+            <TableView fx:constant="CONSTRAINED_RESIZE_POLICY"/>
+        </columnResizePolicy>
+    </TableView>
+</VBox>

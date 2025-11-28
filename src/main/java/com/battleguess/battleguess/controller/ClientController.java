@@ -51,6 +51,10 @@ public class ClientController {
     @FXML private Label lblPlayerID;
     @FXML private Label lblRoomName;
     @FXML private Label lblRoomCode;
+    @FXML private Label lblPlayerScore;
+    @FXML private Label lblInRoomName;
+    @FXML private Label lblInRoomID;
+    @FXML private Label lblInRoomScore;
     @FXML private Button btnCloseRoom;
     @FXML private Button btnExitRoom;
     @FXML private Button joinByCodeButton;
@@ -66,6 +70,7 @@ public class ClientController {
     @FXML private Button micToggleButton;
     @FXML private Button toggleSelfMicButton;
     @FXML private Button closeVideoButton;
+    @FXML private Button btnLogout;
     @FXML private TextField puzzleAnswerField;
     @FXML private TextField joinByCodeField;
     @FXML private TextField chatInputField;
@@ -96,6 +101,7 @@ public class ClientController {
     private Client client;
     private String playerName;
     private int playerID;
+    private int playerScore;
     private int currentRoomID = -1;
     private static final int UDP_PACKET_TYPE_VIDEO = 1;
     private static final int UDP_PACKET_TYPE_AUDIO = 2;
@@ -285,6 +291,30 @@ public class ClientController {
         emojiScrollPane.setManaged(!isVisible);
     }
 
+    @FXML
+    private void handleLogout() {
+        // 1. Ngắt kết nối
+        gracefulShutdown();
+
+        // 2. Quay về màn hình Login
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/battleguess/battleguess/view/login-view.fxml"));
+            javafx.scene.Parent root = loader.load();
+
+            // Lấy Stage hiện tại
+            javafx.stage.Stage stage = (javafx.stage.Stage) btnLogout.getScene().getWindow();
+            stage.setScene(new javafx.scene.Scene(root, 400, 400));
+            stage.setTitle("🎨 BattleGuess Login");
+            stage.centerOnScreen();
+
+            // Xóa sự kiện Close cũ (để tránh lỗi)
+            stage.setOnCloseRequest(null);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     public boolean isUserInRoom() {
         return this.currentRoomID != -1;
     }
@@ -303,14 +333,16 @@ public class ClientController {
                 false);  // Little-endian
     }
 
-    public void initData(int playerID, String username, Client connectedClient) {
+    public void initData(int playerID, String username, int score, Client connectedClient) {
         this.playerID = playerID;
         this.playerName = username;
         this.client = connectedClient;
+        this.playerScore = score;
         this.client.setMessageHandler(this::handleServerMessage);
 
-        lblPlayerName.setText(username);
+        lblPlayerName.setText("Tên: " + username);
         lblPlayerID.setText("ID: " + playerID);
+        lblPlayerScore.setText("Điểm: " + score);
 
         gamePane.setVisible(true);
         gamePane.setManaged(true);
@@ -401,6 +433,13 @@ public class ClientController {
 
                 playerList.setAll(roomStateUpdatePayload.getPlayerStates()); // Cập nhật danh sách
 
+                for (PlayerState p : roomStateUpdatePayload.getPlayerStates()) {
+                    if (p.getPlayerID() == this.playerID) {
+                        updateMyScore(p.getScore());
+                        break;
+                    }
+                }
+
                 if (activeCanvasController != null) {
                     activeCanvasController.showTools(isOwner);
                     activeCanvasController.setDrawingEnabled(isOwner);
@@ -422,6 +461,13 @@ public class ClientController {
 
                 playerList.setAll(roomJoinSuccessPayload.getPlayerList());
 
+                for (PlayerState p : roomJoinSuccessPayload.getPlayerList()) {
+                    if (p.getPlayerID() == this.playerID) {
+                        updateMyScore(p.getScore());
+                        break;
+                    }
+                }
+
                 if (activeCanvasController != null) {
                     activeCanvasController.showTools(isOwner);
                     activeCanvasController.setDrawingEnabled(isOwner);
@@ -434,6 +480,14 @@ public class ClientController {
             case ROOM_STATE_UPDATE: // Ai đó vào/ra/offline
                 RoomStateUpdatePayload roomStateUpdatePayload = (RoomStateUpdatePayload) packet.getData();
                 playerList.setAll(roomStateUpdatePayload.getPlayerStates());
+
+                for (PlayerState p : roomStateUpdatePayload.getPlayerStates()) {
+                    if (p.getPlayerID() == this.playerID) {
+                        updateMyScore(p.getScore());
+                        break;
+                    }
+                }
+
                 break;
 
             case YOU_WERE_KICKED:
@@ -503,7 +557,7 @@ public class ClientController {
                 if (isOwnerOfCurrentRoom) {
                     // Chủ phòng: Sẵn sàng vẽ
                     puzzleAnswerField.setDisable(false);
-                    sendPuzzleButton.setDisable(false); // Bật nút "Gửi câu đố"
+                    sendPuzzleButton.setDisable(false);
                     activeCanvasController.setDrawingEnabled(true);
                     showAlert("Thông báo", "Câu đố đã được giải! Hãy vẽ câu tiếp theo.");
                 } else {
@@ -568,6 +622,26 @@ public class ClientController {
                 }
                 break;
 
+            case FORCE_REFRESH_DATA:
+                Platform.runLater(() -> {
+                    loadMyRooms();
+                    loadJoinedRooms();
+                    if (currentRoomID != -1) {
+                        handleReloadPlayerList();
+                    }
+                });
+                break;
+
+            case ADMIN_CHAT_BROADCAST:
+                AdminChatBroadcastPayload adminChatPayload = (AdminChatBroadcastPayload) packet.getData();
+                addSystemMessage(adminChatPayload.getMessageContent());
+
+                if (!isChatWindowOpen) {
+                    chatNotificationDot.setVisible(true);
+                    chatNotificationDot.setManaged(true);
+                }
+                break;
+
             case ERROR:
                 GenericResponsePayload errorPayload = (GenericResponsePayload) packet.getData();
                 showAlert("Error", errorPayload.getMessage());
@@ -604,6 +678,8 @@ public class ClientController {
         currentRoomID = -1;
         isOwnerOfCurrentRoom = false;
 
+        updateMyScore(this.playerScore);
+
         // DỌN DẸP
         canvasHostPane.setCenter(null);
         activeCanvasController = null;
@@ -628,6 +704,10 @@ public class ClientController {
         gamePane.setManaged(false);
         inRoomPane.setVisible(true);
         inRoomPane.setManaged(true);
+
+        lblInRoomName.setText(playerName);
+        lblInRoomID.setText("(ID: " + playerID + ")");
+        lblInRoomScore.setText(playerScore + " pts");
 
         currentRoomID = room.getRoomID();
         isOwnerOfCurrentRoom = isOwner;
@@ -737,6 +817,18 @@ public class ClientController {
             videoNotificationDot.setVisible(false);
             videoNotificationDot.setManaged(false);
         }
+    }
+
+    private void updateMyScore(int newScore) {
+        this.playerScore = newScore;
+        Platform.runLater(() -> {
+            if (lblPlayerScore != null) {
+                lblPlayerScore.setText("Điểm: " + newScore); // Cập nhật ở Sảnh
+            }
+            if (lblInRoomScore != null) {
+                lblInRoomScore.setText(newScore + " pts"); // Cập nhật ở Phòng
+            }
+        });
     }
 
     private int findOwnerID(List<PlayerState> states) {
@@ -960,7 +1052,7 @@ public class ClientController {
             // Ghi (phát) âm thanh ra loa
             speaker.write(audioData, 0, audioData.length);
 
-            // --- LOGIC HIGHLIGHT (YÊU CẦU 3) ---
+            // --- LOGIC HIGHLIGHT  ---
             VideoTile tile = videoTiles.get(senderID);
             if (tile != null) {
                 tile.setSpeaking(true); // Bật sáng
@@ -1031,6 +1123,23 @@ public class ClientController {
 
         JoinRequestResponsePayload joinRequestResponsePayload = new JoinRequestResponsePayload(payload.getJoinerID(), payload.getRoomInfo(), approved, payload.getJoinerName());
         client.sendMessage(new Packet(MessageType.JOIN_REQUEST_RESPONSE, joinRequestResponsePayload));
+    }
+
+    private void addSystemMessage(String messageContent) {
+        Text senderText = new Text("HỆ THỐNG ADMIN\n");
+        senderText.setStyle("-fx-font-weight: bold; -fx-font-size: 12px; -fx-fill: #ffeb3b;");
+
+        Text messageText = new Text(messageContent);
+        messageText.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-fill: white;");
+
+        TextFlow textFlow = new TextFlow(senderText, messageText);
+        textFlow.setStyle("-fx-background-color: #c0392b; -fx-padding: 10px; -fx-background-radius: 10px; -fx-border-color: #f1c40f; -fx-border-width: 2px; -fx-border-radius: 10px;");
+
+        HBox messageBox = new HBox(textFlow);
+        messageBox.setAlignment(Pos.CENTER_LEFT);
+
+        chatMessagesListView.getItems().add(messageBox);
+        chatMessagesListView.scrollTo(chatMessagesListView.getItems().size() - 1);
     }
 
     private class CreatedRoomCell extends ListCell<RoomInfo> {

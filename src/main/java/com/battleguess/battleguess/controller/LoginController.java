@@ -2,22 +2,25 @@ package com.battleguess.battleguess.controller;
 
 import com.battleguess.battleguess.Client;
 import com.battleguess.battleguess.enum_to_manage_string.MessageType;
+import com.battleguess.battleguess.network.request.ResetPasswordRequestPayload;
 import com.battleguess.battleguess.network.response.GenericResponsePayload;
 import com.battleguess.battleguess.network.request.LoginRequestPayload;
 import com.battleguess.battleguess.network.response.LoginSuccessPayload;
 import com.battleguess.battleguess.network.Packet;
+import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
-import javafx.scene.control.Label;
-import javafx.scene.control.PasswordField;
-import javafx.scene.control.TextField;
+import javafx.scene.control.*;
+import javafx.scene.layout.GridPane;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
+import javafx.util.Pair;
+
 import java.io.IOException;
+import java.util.Optional;
 
 public class LoginController {
     @FXML private TextField txtUsername;
@@ -25,7 +28,7 @@ public class LoginController {
     @FXML private Label lblStatus;
     @FXML private PasswordField txtPassword;
 
-    private String ipAddress = "localhost"; //localhost //192.168.1.21 //192.168.203.205
+    private String ipAddress = "localhost"; //localhost //192.168.1.21 //192.168.203.205 //192.168.145.205
     private Client client;
 
     @FXML
@@ -50,6 +53,40 @@ public class LoginController {
 
         LoginRequestPayload payload = new LoginRequestPayload(username, password);
         client.sendMessage(new Packet(MessageType.REGISTER_REQUEST, payload));
+    }
+
+    @FXML
+    private void onForgotPasswordClicked(ActionEvent event) {
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/battleguess/battleguess/view/reset-password-view.fxml"));
+            Parent root = loader.load();
+
+            ResetPasswordController resetController = loader.getController();
+            resetController.setServerIp(this.ipAddress);
+
+            if (client != null) {
+                client.disconnect();
+                client = null;
+            }
+
+            Stage stage = (Stage) txtUsername.getScene().getWindow();
+            stage.setScene(new Scene(root, 450, 500));
+            stage.setTitle("🔐 Đặt lại mật khẩu");
+            stage.centerOnScreen();
+
+            stage.setOnCloseRequest(windowEvent -> {
+                // 1. Ngắt kết nối client (nếu có)
+                resetController.gracefulShutdown();
+
+                // 2. Đóng ứng dụng hoàn toàn
+                Platform.exit();
+                System.exit(0);
+            });
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            setStatus("Lỗi không thể mở giao diện quên mật khẩu!", true);
+        }
     }
 
     private boolean isInputValid(String username, String password) {
@@ -115,26 +152,32 @@ public class LoginController {
             case LOGIN_SUCCESS:
                 LoginSuccessPayload successData = (LoginSuccessPayload) packet.getData();
                 setStatus("Đăng nhập thành công!", false);
-                openClientView(successData.getPlayerID(), successData.getUsername(), client);
+                openClientView(successData.getPlayerID(), successData.getUsername(), successData.getScore(), client);
                 break;
             case LOGIN_FAILED:
             case REGISTER_SUCCESS:
             case REGISTER_FAILED:
             case ERROR:
                 GenericResponsePayload response = (GenericResponsePayload) packet.getData();
-                setStatus(response.getMessage(), (packet.getType() != MessageType.REGISTER_SUCCESS));
+
+                boolean isError = true;
+                if (packet.getType() == MessageType.REGISTER_SUCCESS) {
+                    isError = false;
+                }
+
+                setStatus(response.getMessage(), isError);
                 if(packet.getType() == MessageType.ERROR) client = null;
                 break;
         }
     }
 
-    private void openClientView(int playerID, String username, Client connectedClient) {
+    private void openClientView(int playerID, String username, int score, Client connectedClient) {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/com/battleguess/battleguess/view/client-view.fxml"));
             Parent root = loader.load();
 
             ClientController clientController = loader.getController();
-            clientController.initData(playerID, username, connectedClient);
+            clientController.initData(playerID, username, score, connectedClient);
 
             Stage stage = (Stage) txtUsername.getScene().getWindow();
             stage.setScene(new Scene(root, 900, 700));
